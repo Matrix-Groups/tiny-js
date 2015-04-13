@@ -208,6 +208,8 @@ public:
     CScriptVar *getReturnVar(); ///< If this is a function, get the result value (for use by native functions)
     void setReturnVar(CScriptVar *var); ///< Set the result value. Use this when setting complex return data as it avoids a deepCopy()
     CScriptVar *getParameter(const std::string &name); ///< If this is a function, get the parameter with the given name (for use by native functions)
+	void addExecution(); ///< If this is a function, add one to its execution count
+	int getExecutions(); ///< If this is a function, get the number of times it has been executed
 
     CScriptVarLink *findChild(const std::string &childName); ///< Tries to find a child with the given name, may return 0
     CScriptVarLink *findChildOrCreate(const std::string &childName, int varFlags=SCRIPTVAR_UNDEFINED); ///< Tries to find a child with the given name, or will create it with the given flags
@@ -264,6 +266,7 @@ public:
     int getRefs(); ///< Get the number of references to this script variable
 protected:
     int refs; ///< The number of references held to this - used for garbage collection
+	int executions; ///< The number of times this function has been executed (if this is a function)
 
     std::string data; ///< The contents of this variable if it is a string
     long intData; ///< The contents of this variable if it is an int

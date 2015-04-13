@@ -921,6 +921,18 @@ CScriptVar *CScriptVar::getParameter(const std::string &name)
 	return findChildOrCreate(name)->var;
 }
 
+void CScriptVar::addExecution()
+{
+	// to be honest, it doesn't really matter if this is a function or not;
+	// executions could be tracked for things like variable access, basic blocks...
+	this->executions++;
+}
+
+int CScriptVar::getExecutions()
+{
+	return this->executions;
+}
+
 CScriptVarLink *CScriptVar::findChild(const string &childName)
 {
 	CScriptVarLink *v = firstChild;
@@ -1755,6 +1767,8 @@ CScriptVarLink *CTinyJS::functionCall(bool &execute, CScriptVarLink *function, C
 				block(execute);
 				// because return will probably have called this, and set execute to false
 				execute = true;
+				// on a successful execution of the body, add one to the execution count
+				function->var->addExecution();
 			}
 			catch (CScriptException *e)
 			{
