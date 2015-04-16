@@ -2396,8 +2396,7 @@ void CTinyJS::statement(bool &execute)
 		statement(loopCond ? execute : noexecute);
 		CScriptLex *whileBody = l->getSubLex(whileBodyStart);
 		CScriptLex *oldLex = l;
-		int loopCount = TINYJS_LOOP_MAX_ITERATIONS;
-		while (loopCond && loopCount-- > 0)
+		while (loopCond)
 		{
 			whileCond->reset();
 			l = whileCond;
@@ -2414,13 +2413,6 @@ void CTinyJS::statement(bool &execute)
 		l = oldLex;
 		delete whileCond;
 		delete whileBody;
-
-		if (loopCount <= 0)
-		{
-			root->trace();
-			TRACE("WHILE Loop exceeded %d iterations at %s\n", TINYJS_LOOP_MAX_ITERATIONS, l->getPosition().c_str());
-			throw new CScriptException("LOOP_ERROR");
-		}
 	}
 	else if (l->tk == LEX_R_FOR)
 	{
@@ -2449,8 +2441,7 @@ void CTinyJS::statement(bool &execute)
 			l = forIter;
 			CLEAN(base(execute));
 		}
-		int loopCount = TINYJS_LOOP_MAX_ITERATIONS;
-		while (execute && loopCond && loopCount-- > 0)
+		while (execute && loopCond)
 		{
 			forCond->reset();
 			l = forCond;
@@ -2474,12 +2465,6 @@ void CTinyJS::statement(bool &execute)
 		delete forCond;
 		delete forIter;
 		delete forBody;
-		if (loopCount <= 0)
-		{
-			root->trace();
-			TRACE("FOR Loop exceeded %d iterations at %s\n", TINYJS_LOOP_MAX_ITERATIONS, l->getPosition().c_str());
-			throw new CScriptException("LOOP_ERROR");
-		}
 	}
 	else if (l->tk == LEX_R_RETURN)
 	{

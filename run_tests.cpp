@@ -190,7 +190,6 @@ void memtracing_kill() {
 }
 #endif // INSANE_MEMORY_DEBUG
 
-
 bool run_test(const char *filename) {
   printf("TEST %s ", filename);
   struct stat results;

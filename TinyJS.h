@@ -46,9 +46,6 @@
 #define TRACE printf
 #endif // TRACE
 
-
-const int TINYJS_LOOP_MAX_ITERATIONS = 8192;
-
 enum LEX_TYPES {
     LEX_EOF = 0,
     LEX_ID = 256,
@@ -187,7 +184,8 @@ public:
 
   CScriptVarLink(CScriptVar *var, const std::string &name = TINYJS_TEMP_NAME);
   CScriptVarLink(const CScriptVarLink &link); ///< Copy constructor
-  ~CScriptVarLink();
+  ~CScriptVarLink(); 
+
   void replaceWith(CScriptVar *newVar); ///< Replace the Variable pointed to
   void replaceWith(CScriptVarLink *newVar); ///< Replace the Variable pointed to (just dereferences)
   int getIntName(); ///< Get the name as an integer (for arrays)
@@ -208,8 +206,8 @@ public:
     CScriptVar *getReturnVar(); ///< If this is a function, get the result value (for use by native functions)
     void setReturnVar(CScriptVar *var); ///< Set the result value. Use this when setting complex return data as it avoids a deepCopy()
     CScriptVar *getParameter(const std::string &name); ///< If this is a function, get the parameter with the given name (for use by native functions)
-	void addExecution(); ///< If this is a function, add one to its execution count
-	int getExecutions(); ///< If this is a function, get the number of times it has been executed
+	void addExecution(); ///< If this is a function, add one to the number of times its been executed
+	int getExecutions(); ///< If this is a function, get the number of times it's been executed
 
     CScriptVarLink *findChild(const std::string &childName); ///< Tries to find a child with the given name, may return 0
     CScriptVarLink *findChildOrCreate(const std::string &childName, int varFlags=SCRIPTVAR_UNDEFINED); ///< Tries to find a child with the given name, or will create it with the given flags
