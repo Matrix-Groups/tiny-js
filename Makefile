@@ -25,4 +25,4 @@ run_profiler: run_profiler.o $(OBJECTS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -f run_tests Script run_tests.o Script.o $(OBJECTS)
+	rm -f run_tests Script run_tests.o run_profiler.o Script.o $(OBJECTS)
