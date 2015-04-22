@@ -2,10 +2,10 @@
 
 function smooth(image) {
 	var output = [];
-	for(var i = 0; image.length; i++) {
+	for(var i = 0; i < image.length; i++) {
 		output[i] = [];
 		var ii_max = Math.min(i+1, image[i].length);
-		for(var j = 0; j = image[i].length; j++) {
+		for(var j = 0; j < image[i].length; j++) {
 			var jj_max = Math.min(j+1, image[i][j].length);
 			var result = { r: 0, g: 0, b: 0 };
 			for(var ii = Math.max(0, i-1); ii < ii_max; ii++) {
@@ -25,7 +25,7 @@ function smooth(image) {
 }
 
 function init() {
-	NUM_ITERATIONS = 1;
+	NUM_ITERATIONS = 2;
 	IMAGE_WIDTH = 640;
 	IMAGE_HEIGHT = 480;
 }
@@ -55,4 +55,6 @@ function run() {
 
 	for(var i = 0; i < NUM_ITERATIONS; i++)
 		smooth(IMAGE);
+
+	return "smooth()";
 }

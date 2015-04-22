@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 	CTinyJS *js = new CTinyJS();
 	/* add the functions from TinyJS_Functions.cpp */
 	registerFunctions(js);
-	registerFunctions(js);
+	registerMathFunctions(js);
 	/* Add a native function */
 	js->addNative("function print(text)", &js_print, 0);
 	/* Execute out bit of code - we could call 'evaluate' here if
@@ -107,11 +107,10 @@ int main(int argc, char **argv)
 			while(argv[i][idx] != '=' and argv[i][idx] != '\0') idx++;
 			if(argv[i][idx] == '\0') continue;
 
-			argv[i][idx] = '=';
-			idx++;
+			argv[i][idx++] = '\0';
 			// really, you might be fine just prepending "var " and appending ";" but
 			// might as well be safe
-			js->execute("var " + string(argv[i]) + "= (" + argv[i][idx] + ");");
+			js->execute("var " + string(argv[i]) + "= (" + &(argv[i][idx]) + ");");
 		}
 
 		// run algorithm setup
