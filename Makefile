@@ -1,6 +1,6 @@
 CC=g++
-CFLAGS=-c -g -Wall -D_DEBUG -rdynamic
-LDFLAGS=-g -rdynamic
+CFLAGS=-c -g -Wall -D_DEBUG -std=c++11 -rdynamic
+LDFLAGS=-g
 
 SOURCES= \
 TinyJS.cpp \
@@ -25,4 +25,4 @@ run_profiler: run_profiler.o $(OBJECTS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -f run_tests Script run_tests.o run_profiler.o Script.o $(OBJECTS)
+	rm -f run_tests Script run_profiler run_tests.o run_profiler.o Script.o $(OBJECTS)

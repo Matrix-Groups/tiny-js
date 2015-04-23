@@ -41,6 +41,7 @@
 #endif
 #include <string>
 #include <vector>
+#include <map>
 
 #ifndef TRACE
 #define TRACE printf
@@ -214,7 +215,7 @@ public:
     CScriptVarLink *findChildOrCreateByPath(const std::string &path); ///< Tries to find a child with the given path (separated by dots)
     CScriptVarLink *addChild(const std::string &childName, CScriptVar *child=NULL);
     CScriptVarLink *addChildNoDup(const std::string &childName, CScriptVar *child=NULL); ///< add a child overwriting any with the same name
-    void removeChild(CScriptVar *child);
+    void removeChild(const std::string &childName, CScriptVar *child, bool throwIfMissing=false);
     void removeLink(CScriptVarLink *link); ///< Remove a specific link (this is faster than finding via a child)
     void removeAllChildren();
     CScriptVar *getArrayIndex(int idx); ///< The the value at an array index
@@ -244,7 +245,7 @@ public:
     bool isNative() { return (flags&SCRIPTVAR_NATIVE)!=0; }
     bool isUndefined() { return (flags & SCRIPTVAR_VARTYPEMASK) == SCRIPTVAR_UNDEFINED; }
     bool isNull() { return (flags & SCRIPTVAR_NULL)!=0; }
-    bool isBasic() { return firstChild==0; } ///< Is this *not* an array/object/etc
+    bool isBasic() { return children.empty(); } ///< Is this *not* an array/object/etc
 
     CScriptVar *mathsOp(CScriptVar *b, int op); ///< do a maths op with another script variable
     void copyValue(CScriptVar *val); ///< copy the value from the value given
@@ -255,8 +256,7 @@ public:
     void getJSON(std::ostringstream &destination, const std::string linePrefix=""); ///< Write out all the JS code needed to recreate this script variable to the stream (as JSON)
     void setCallback(JSCallback callback, void *userdata); ///< Set the callback for native functions
 
-    CScriptVarLink *firstChild;
-    CScriptVarLink *lastChild;
+	std::map<std::string, CScriptVarLink*> children;
 
     /// For memory management/garbage collection
     CScriptVar *ref(); ///< Add reference to this variable
@@ -278,6 +278,8 @@ protected:
     /** Copy the basic data and flags from the variable given, with no
       * children. Should be used internally only - by copyValue and deepCopy */
     void copySimpleData(CScriptVar *val);
+
+	CScriptVarLink* lastChild; ///< only used to maintain script link linked list
 
     friend class CTinyJS;
 };

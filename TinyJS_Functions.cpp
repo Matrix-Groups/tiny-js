@@ -166,15 +166,14 @@ void scEval(CScriptVar *c, void *data) {
 
 void scArrayContains(CScriptVar *c, void *data) {
   CScriptVar *obj = c->getParameter("obj");
-  CScriptVarLink *v = c->getParameter("this")->firstChild;
 
   bool contains = false;
-  while (v) {
+  for(auto& it: c->getParameter("this")->children) {
+	  CScriptVarLink* v = it.second;
       if (v->var->equals(obj)) {
         contains = true;
         break;
       }
-      v = v->nextSibling;
   }
 
   c->getReturnVar()->setInt(contains);
@@ -185,16 +184,17 @@ void scArrayRemove(CScriptVar *c, void *data) {
   vector<int> removedIndices;
   CScriptVarLink *v;
   // remove
-  v = c->getParameter("this")->firstChild;
-  while (v) {
+  for(auto& it : c->getParameter("this")->children)
+  {
+	  v = it.second;
       if (v->var->equals(obj)) {
         removedIndices.push_back(v->getIntName());
-      }
-      v = v->nextSibling;
+      }					   
   }
   // renumber
-  v = c->getParameter("this")->firstChild;
-  while (v) {
+  for(auto& it : c->getParameter("this")->children)
+  {
+	  v = it.second;
       int n = v->getIntName();
       int newn = n;
       for (size_t i=0;i<removedIndices.size();i++)
@@ -202,7 +202,6 @@ void scArrayRemove(CScriptVar *c, void *data) {
           newn--;
       if (newn!=n)
         v->setIntName(newn);
-      v = v->nextSibling;
   }
 }
 
