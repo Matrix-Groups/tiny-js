@@ -53,35 +53,6 @@ using namespace std;
 #define scReturnInt(a)      ( c->getReturnVar()->setInt(a) )
 #define scReturnDouble(a)   ( c->getReturnVar()->setDouble(a) )  
 
-#ifdef _MSC_VER
-namespace
-{
-    double asinh( const double &value )
-    {
-        double returned;
-
-        if(value>0)
-        returned = log(value + sqrt(value * value + 1));
-        else
-        returned = -log(-value + sqrt(value * value + 1));
-
-        return(returned);
-    }
-
-    double acosh( const double &value )
-    {
-        double returned;
-
-        if(value>0)
-        returned = log(value + sqrt(value * value - 1));
-        else
-        returned = -log(-value + sqrt(value * value - 1));
-
-        return(returned);
-    }
-}
-#endif
-
 //Math.abs(x) - returns absolute of given value
 void scMathAbs(CScriptVar *c, void *userdata) {
     if ( scIsInt("a") ) {
