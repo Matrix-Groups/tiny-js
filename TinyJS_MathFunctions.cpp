@@ -53,35 +53,6 @@ using namespace std;
 #define scReturnInt(a)      ( c->getReturnVar()->setInt(a) )
 #define scReturnDouble(a)   ( c->getReturnVar()->setDouble(a) )  
 
-#ifdef _MSC_VER
-namespace nonstd
-{
-    double asinh( const double &value )
-    {
-        double returned;
-
-        if(value>0)
-        returned = log(value + sqrt(value * value + 1));
-        else
-        returned = -log(-value + sqrt(value * value + 1));
-
-        return(returned);
-    }
-
-    double acosh( const double &value )
-    {
-        double returned;
-
-        if(value>0)
-        returned = log(value + sqrt(value * value - 1));
-        else
-        returned = -log(-value + sqrt(value * value - 1));
-
-        return(returned);
-    }
-}
-#endif
-
 //Math.abs(x) - returns absolute of given value
 void scMathAbs(CScriptVar *c, void *userdata) {
     if ( scIsInt("a") ) {
@@ -188,7 +159,7 @@ void scMathSinh(CScriptVar *c, void *userdata) {
 
 //Math.asinh(a) - returns trig. hyperbolic arcsine of given angle in radians
 void scMathASinh(CScriptVar *c, void *userdata) {
-    scReturnDouble( nonstd::asinh( scGetDouble("a") ) );
+    scReturnDouble( asinh( scGetDouble("a") ) );
 }
 
 //Math.cosh(a) - returns trig. hyperbolic cosine of given angle in radians
@@ -198,7 +169,7 @@ void scMathCosh(CScriptVar *c, void *userdata) {
 
 //Math.acosh(a) - returns trig. hyperbolic arccosine of given angle in radians
 void scMathACosh(CScriptVar *c, void *userdata) {
-    scReturnDouble( nonstd::acosh( scGetDouble("a") ) );
+    scReturnDouble( acosh( scGetDouble("a") ) );
 }
 
 //Math.tanh(a) - returns trig. hyperbolic tangent of given angle in radians
