@@ -486,6 +486,9 @@ void CScriptLex::getNextToken()
 		else if (tkStr == "null") tk = LEX_R_NULL;
 		else if (tkStr == "undefined") tk = LEX_R_UNDEFINED;
 		else if (tkStr == "new") tk = LEX_R_NEW;
+		else if (tkStr == "__obj_" ||
+		         tkStr == "__new_" ||
+		         tkStr == "__array_") tk = LEX_R_RESERVED;
 	}
 	else if (isNumeric(currCh))
 	{ // Numbers
@@ -1523,6 +1526,9 @@ CTinyJS::CTinyJS()
 	root->addChild("String", stringClass);
 	root->addChild("Array", arrayClass);
 	root->addChild("Object", objectClass);
+	addNative("__array_(argString)", &createArrayNative, this);
+	addNative("__object_(argString)", &createObjectNative, this);
+	addNative("__new_(argString)", &keywordNewNative, this);
 }
 
 CTinyJS::~CTinyJS()
@@ -1928,52 +1934,11 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
 	}
 	if (l->tk == '{')
 	{
-		CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
-		/* JSON-style object definition */
-		l->match('{');
-		while (l->tk != '}')
-		{
-			string id = l->tkStr;
-			// we only allow strings or IDs on the left hand side of an initialisation
-			if (l->tk == LEX_STR) l->match(LEX_STR);
-			else l->match(LEX_ID);
-			l->match(':');
-			if (execute)
-			{
-				CScriptVarLink *a = base(execute);
-				contents->addChild(id, a->var);
-				CLEAN(a);
-			}
-			// no need to clean here, as it will definitely be used
-			if (l->tk != '}') l->match(',');
-		}
-
-		l->match('}');
-		return new CScriptVarLink(contents);
+		return new CScriptVarLink(createObject(execute, l));
 	}
 	if (l->tk == '[')
 	{
-		CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_ARRAY);
-		/* JSON-style array */
-		l->match('[');
-		int idx = 0;
-		while (l->tk != ']')
-		{
-			if (execute)
-			{
-				char idx_str[16]; // big enough for 2^32
-				sprintf_s(idx_str, sizeof(idx_str), "%d", idx);
-
-				CScriptVarLink *a = base(execute);
-				contents->addChild(idx_str, a->var);
-				CLEAN(a);
-			}
-			// no need to clean here, as it will definitely be used
-			if (l->tk != ']') l->match(',');
-			idx++;
-		}
-		l->match(']');
-		return new CScriptVarLink(contents);
+		return new CScriptVarLink(createArray(execute, l));
 	}
 	if (l->tk == LEX_R_FUNCTION)
 	{
@@ -1986,46 +1951,124 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
 	{
 		// new -> create a new object
 		l->match(LEX_R_NEW);
-		const string &className = l->tkStr;
-		if (execute)
+	}
+	// Nothing we can do here... just hope it's the end...
+	l->match(LEX_EOF);
+	return 0;
+}
+
+CScriptVar* CTinyJS::createObject(bool& execute, CScriptLex* lexer)
+{
+	CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
+	/* JSON-style object definition */
+	lexer->match('{');
+	while(lexer->tk != '}')
+	{
+		string id = lexer->tkStr;
+		// we only allow strings or IDs on the left hand side of an initialisation
+		if(lexer->tk == LEX_STR) l->match(LEX_STR);
+		else lexer->match(LEX_ID);
+		lexer->match(':');
+		if(execute)
 		{
-			CScriptVarLink *objClassOrFunc = findInScopes(className);
-			if (!objClassOrFunc)
-			{
-				TRACE("%s is not a valid class name", className.c_str());
-				return new CScriptVarLink(new CScriptVar());
-			}
-			l->match(LEX_ID);
-			CScriptVar *obj = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
-			CScriptVarLink *objLink = new CScriptVarLink(obj);
-			if (objClassOrFunc->var->isFunction())
-			{
-				CLEAN(functionCall(execute, objClassOrFunc, obj));
-			}
-			else
-			{
-				obj->addChild(TINYJS_PROTOTYPE_CLASS, objClassOrFunc->var);
-				if (l->tk == '(')
-				{
-					l->match('(');
-					l->match(')');
-				}
-			}
-			return objLink;
+			CScriptVarLink *a = base(execute);
+			contents->addChild(id, a->var);
+			CLEAN(a);
+		}
+		// no need to clean here, as it will definitely be used
+		if(lexer->tk != '}') lexer->match(',');
+	}
+
+	lexer->match('}');
+	return contents;
+}
+
+void CTinyJS::createObjectNative(CScriptVar* root, void* userData)
+{
+	CScriptLex* lexer = new CScriptLex(root->findChild("argString")->var->getString());
+	bool execute = true; // how tedious
+	root->setReturnVar(((CTinyJS*)userData)->createObject(execute, lexer));
+	delete lexer;
+}
+
+CScriptVar* CTinyJS::createArray(bool& execute, CScriptLex* lexer)
+{
+	CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_ARRAY);
+	/* JSON-style array */
+	lexer->match('[');
+	int idx = 0;
+	while(lexer->tk != ']')
+	{
+		if(execute)
+		{
+			char idx_str[16]; // big enough for 2^32
+			sprintf_s(idx_str, sizeof(idx_str), "%d", idx);
+
+			CScriptVarLink *a = base(execute);
+			contents->addChild(idx_str, a->var);
+			CLEAN(a);
+		}
+		// no need to clean here, as it will definitely be used
+		if(lexer->tk != ']') lexer->match(',');
+		idx++;
+	}
+	lexer->match(']');
+	return contents;
+}
+
+void CTinyJS::createArrayNative(CScriptVar* root, void* userData)
+{
+	CScriptLex* lexer = new CScriptLex(root->findChild("argString")->var->getString());
+	bool execute = true; // how tedious
+	root->setReturnVar(((CTinyJS*)userData)->createArray(execute, lexer));
+	delete lexer;
+}
+
+CScriptVar* CTinyJS::keywordNew(bool& execute, CScriptLex* lexer)
+{
+	CScriptVar *obj = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
+	if(execute)
+	{
+		const string &className = l->tkStr;
+		CScriptVarLink *objClassOrFunc = findInScopes(className);
+		if(!objClassOrFunc)
+		{
+			TRACE("%s is not a valid class name", className.c_str());
+			return new CScriptVar();
+		}
+		l->match(LEX_ID);
+		if(objClassOrFunc->var->isFunction())
+		{
+			CLEAN(functionCall(execute, objClassOrFunc, obj));
 		}
 		else
 		{
-			l->match(LEX_ID);
-			if (l->tk == '(')
+			obj->addChild(TINYJS_PROTOTYPE_CLASS, objClassOrFunc->var);
+			if(l->tk == '(')
 			{
 				l->match('(');
 				l->match(')');
 			}
 		}
 	}
-	// Nothing we can do here... just hope it's the end...
-	l->match(LEX_EOF);
-	return 0;
+	else
+	{
+		l->match(LEX_ID);
+		if(l->tk == '(')
+		{
+			l->match('(');
+			l->match(')');
+		}
+	}
+	return obj;
+}
+
+void CTinyJS::keywordNewNative(CScriptVar* root, void* userData)
+{
+	CScriptLex* lexer = new CScriptLex(root->findChild("argString")->var->getString());
+	bool execute = true; // how tedious
+	root->setReturnVar(((CTinyJS*)userData)->keywordNew(execute, lexer));
+	delete lexer;
 }
 
 CScriptVarLink *CTinyJS::unary(bool &execute)

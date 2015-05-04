@@ -73,62 +73,28 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 	}
 	if(lexer->tk == LEX_ID)
 	{
-		CScriptVarLink *a = execute ? findInScopes(lexer->tkStr) : new CScriptVarLink(new CScriptVar());
-		//printf("0x%08X for %s at %s\n", (unsigned int)a, lexer->tkStr.c_str(), lexer->getPosition().c_str());
-		/* The parent if we're executing a method call */
-		CScriptVar *parent = 0;
-
-		if(execute && !a)
-		{
-			/* Variable doesn't exist! JavaScript says we should create it
-			* (we won't add it here. This is done in the assignment operator)*/
-			a = new CScriptVarLink(new CScriptVar(), lexer->tkStr);
-		}
+		std::string tokenName = lexer->tkStr;
 		lexer->match(LEX_ID);
+		CSyntaxExpression* a;
 		while(lexer->tk == '(' || lexer->tk == '.' || lexer->tk == '[')
 		{
 			if(lexer->tk == '(')
-			{ // ------------------------------------- Function Call
-				a = functionCall(execute, a, parent);
+			{ 
+				a = new CSyntaxFunctionCall(a ? a : new CSyntaxID(tokenName), functionCall());
 			}
 			else if(lexer->tk == '.')
-			{ // ------------------------------------- Record Access
+			{ 
 				lexer->match('.');
-				if(execute)
-				{
-					const string &name = lexer->tkStr;
-					CScriptVarLink *child = a->var->findChild(name);
-					if(!child) child = findInParentClasses(a->var, name);
-					if(!child)
-					{
-						/* if we haven't found this defined yet, use the built-in
-						'length' properly */
-						if(a->var->isArray() && name == "length")
-						{
-							int l = a->var->getArrayLength();
-							child = new CScriptVarLink(new CScriptVar(l));
-						}
-						else if(a->var->isString() && name == "length")
-						{
-							int l = a->var->getString().size();
-							child = new CScriptVarLink(new CScriptVar(l));
-						}
-						else
-						{
-							child = a->var->addChild(name);
-						}
-					}
-					parent = a->var;
-					a = child;
-				}
+				const std::string &name = lexer->tkStr;
+				a = new CSyntaxBinaryOperator('.', a ? a : new CSyntaxID(tokenName), new CSyntaxID(name));
 				lexer->match(LEX_ID);
 			}
 			else if(lexer->tk == '[')
-			{ // ------------------------------------- Array Access
+			{ 
 				lexer->match('[');
 				CSyntaxExpression* index = base();
 				lexer->match(']');
-				
+				a = new CSyntaxBinaryOperator('[', a ? a : new CSyntaxID(tokenName), index);
 			}
 			else ASSERT(0);
 		}
@@ -148,47 +114,35 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 	}
 	if(lexer->tk == '{')
 	{
-		CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
 		/* JSON-style object definition */
+		std::string arg = "{";
 		lexer->match('{');
+		// compile string
 		while(lexer->tk != '}')
 		{
-			std::string id = lexer->tkStr;
-			// we only allow strings or IDs on the left hand side of an initialisation
-			if(lexer->tk == LEX_STR) lexer->match(LEX_STR);
-			else lexer->match(LEX_ID);
-			lexer->match(':');
-			if(execute)
-			{
-				CScriptVarLink *a = base(execute);
-				contents->addChild(id, a->var);
-				CLEAN(a);
-			}
-			// no need to clean here, as it will definitely be used
-			if(lexer->tk != '}') lexer->match(',');
+			arg += lexer->tkStr;
+			lexer->match(lexer->tk);
 		}
-
+		arg += "}";
 		lexer->match('}');
-		return new CScriptVarLink(contents);
+		// "__obj_()" is a special native function that constructs an object from a string
+		return new CSyntaxFunctionCall(new CSyntaxID("__obj_"), std::vector<CSyntaxExpression*>(1,
+			new CSyntaxFactor(arg.c_str())));
 	}
 	if(lexer->tk == '[')
 	{
-		CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_ARRAY);
 		/* JSON-style array definition */
 		lexer->match('[');
-		int idx = 0;
+		std::string arg = "[";
 		while(lexer->tk != ']')
 		{
-			char idx_str[16]; // big enough for 2^32
-			sprintf_s(idx_str, sizeof(idx_str), "%d", idx);
-
-			CScriptVarLink *a = base();
-			contents->addChild(idx_str, a->var);
-			if(lexer->tk != ']') lexer->match(',');
-			idx++;
+			arg += lexer->tkStr;
+			lexer->match(lexer->tk);
 		}
 		lexer->match(']');
-		return new CScriptVarLink(contents);
+		arg += ']';
+		return new CSyntaxFunctionCall(new CSyntaxID("__array_"), std::vector<CSyntaxExpression*>(1,
+			new CSyntaxFactor(arg.c_str())));
 	}
 	if(lexer->tk == LEX_R_FUNCTION)
 	{
@@ -204,23 +158,16 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		lexer->match(LEX_R_NEW);
 		const std::string &className = lexer->tkStr;
 		lexer->match(LEX_ID);
-		// unfortunately I have lost scope data so I have no idea what I
-		// happen to be looking at.
-		if(objClassOrFunc->var->isFunction())
+		std::string arg = className + "(";
+		while(lexer->tk != ')')
 		{
-			return new CSyntaxFunctionCall(new CSyntaxID(className), functionCall());
+			arg += lexer->tkStr;
+			lexer->match(lexer->tk);
 		}
-		else
-		{
-			// not sure what to do here either
-			obj->addChild(TINYJS_PROTOTYPE_CLASS, objClassOrFunc->var);
-			if(lexer->tk == '(')
-			{
-				lexer->match('(');
-				lexer->match(')');
-			}
-			return 0;
-		}
+		lexer->match(')');
+		arg += ')';
+		return new CSyntaxFunctionCall(new CSyntaxID("__new_"), std::vector<CSyntaxExpression*>(1,
+			new CSyntaxFactor(arg.c_str())));
 	}
 	// Nothing we can do here... just hope it's the end...
 	lexer->match(LEX_EOF);

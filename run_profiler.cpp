@@ -104,7 +104,7 @@ int main(int argc, char **argv)
 		for(int i = 2; i < argc; i++)
 		{
 			int idx = 0;
-			while(argv[i][idx] != '=' and argv[i][idx] != '\0') idx++;
+			while(argv[i][idx] != '=' && argv[i][idx] != '\0') idx++;
 			if(argv[i][idx] == '\0') continue;
 
 			argv[i][idx++] = '\0';

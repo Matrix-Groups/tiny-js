@@ -90,6 +90,7 @@ enum LEX_TYPES {
     LEX_R_NULL,
     LEX_R_UNDEFINED,
     LEX_R_NEW,
+	LEX_R_RESERVED,	/* Used for reserved JIT-compile function names; these cannot appear in original source */
 
 	LEX_R_LIST_END /* always the last entry */
 };
@@ -172,6 +173,7 @@ protected:
 class CScriptVar;
 
 typedef void (*JSCallback)(CScriptVar *var, void *userdata);
+typedef CScriptVar* (*NativeImpl)(bool& execute, CScriptLex* lexer);
 
 class CScriptVarLink
 {
@@ -356,6 +358,19 @@ private:
     CScriptVarLink *findInScopes(const std::string &childName); ///< Finds a child, looking recursively up the scopes
     /// Look up in any parent classes of the given object
     CScriptVarLink *findInParentClasses(CScriptVar *object, const std::string &name);
+
+	/* Used for new keyword and object/array definitions in JIT compiling */
+	CScriptVar* createObject(bool& execute, CScriptLex* lexer);
+	CScriptVar* createArray(bool& execute, CScriptLex* lexer);
+	CScriptVar* keywordNew(bool& execute, CScriptLex* lexer);
+	/* These are the functions actually registered with addNative to implement
+	   new, [], and {} in the JIT-compiled code. The second parameter is the instance of 
+	   CTinyJS, since these functions must be declared static to match the signature
+	   of JSCallback. */
+	static void createObjectNative(CScriptVar* root, void* impl);
+	static void createArrayNative(CScriptVar* root, void* impl);
+	static void keywordNewNative(CScriptVar* root, void* impl);
+	
 };
 
 #endif
