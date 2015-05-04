@@ -1,40 +1,29 @@
-// Bubble sort
+// fibonacci numbers
 
-function sort(array) {
-	for(var i = 0; i < array.length-1; i++) {
-		for(var j = i; j < array.length; j++) {
-			if(array[i] > array[j]) {
-				var temp = array[j];
-				array[j] = array[i];
-				array[i] = temp;
-			}
-		}
-	}	
-}
-
-function create() {
-	var a = [];
-	for(var i = 0; i < NUM_ELEMENTS; i++)
-		a[i] = Math.rand();
-	return a;
+function fib(n) {
+	var current, last = 0, penult = 1;
+	for(var i = 0; i < n; i++) {
+		current = last + penult;
+		penult = last;
+		last = current;
+	}
+	return current;
 }
 
 function init() {
-	NUM_ITERATIONS = 30;
-	NUM_ELEMENTS = 500;
+	NUM_ITERATIONS = 50;
+	MAX_FIB = 1000;
 }
 
 function get_iterations() { return NUM_ITERATIONS; }
 
-function setup() {
-	ARRAY = create();
-}
+function setup() { }
 
 function run() {
-	print("Running bubble sort - " + NUM_ITERATIONS + " iterations; " + NUM_ELEMENTS + "-element arrays");
+	print("Running fibonacci numbers - " + NUM_ITERATIONS + " iterations; computing fib(" + MAX_FIB + ") each time.");
 
 	for(var i = 0; i < NUM_ITERATIONS; i++)
-		sort(ARRAY);
+		fib(MAX_FIB);
 
-	return "sort()";
+	return "fib()";
 }
