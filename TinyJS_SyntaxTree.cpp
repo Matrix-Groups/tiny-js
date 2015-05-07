@@ -653,7 +653,7 @@ CSyntaxCondition::CSyntaxCondition(int op, CSyntaxExpression* left, CSyntaxExpre
 CSyntaxNew::CSyntaxNew(CSyntaxExpression* name, std::vector<CSyntaxExpression*>& arguments)
 	: CSyntaxFunctionCall(name, arguments) { }
 
-CSyntaxFunctionCall::CSyntaxFunctionCall(CSyntaxExpression* name, std::vector<CSyntaxExpression*>& arguments)
+CSyntaxFunctionCall::CSyntaxFunctionCall(CSyntaxExpression* name, std::vector<CSyntaxExpression*> arguments)
 {
 	node = name;
 	actuals = arguments;

@@ -117,7 +117,7 @@ private:
 class CSyntaxFunctionCall : public CSyntaxExpression
 {
 public:
-	CSyntaxFunctionCall(CSyntaxExpression* name, std::vector<CSyntaxExpression*>& arguments);
+	CSyntaxFunctionCall(CSyntaxExpression* name, std::vector<CSyntaxExpression*> arguments);
 	~CSyntaxFunctionCall();
 
 protected:
