@@ -11,7 +11,7 @@ CScriptSyntaxTree::CScriptSyntaxTree(CScriptLex* lexer)
 	root = 0;
 }
 
-CScriptSyntaxTree::CScriptSyntaxTree(std::string& buffer)
+CScriptSyntaxTree::CScriptSyntaxTree(const std::string& buffer)
 {
 	this->lexer = new CScriptLex(buffer);
 	lexerOwned = true;

@@ -203,7 +203,7 @@ class CScriptSyntaxTree
 {
 public:
 	CScriptSyntaxTree(CScriptLex* lexer);
-	CScriptSyntaxTree(std::string& buffer);
+	CScriptSyntaxTree(const std::string& buffer);
 	~CScriptSyntaxTree();
 
 	void parse();
