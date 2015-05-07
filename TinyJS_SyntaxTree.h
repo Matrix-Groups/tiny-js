@@ -1,6 +1,7 @@
 #include "TinyJS.h"
 #include <string.h>
 #include <vector>
+#include <cstdlib>
 
 #pragma once
 
@@ -88,8 +89,8 @@ public:
 
 	bool isValueType() { return factorType & (F_TYPE_INT | F_TYPE_DOUBLE | F_TYPE_STRING); }
 	std::string getRawValue() { return value; }
-	double getDouble() { if(factorType != F_TYPE_DOUBLE) return getInt(); return strtod(value.c_str(), 0); }
-	int getInt() { if(factorType != F_TYPE_INT) return 0; return strtol(value.c_str(), 0, 0); }
+	double getDouble() { if(factorType != F_TYPE_DOUBLE) return getInt(); return std::strtod(value.c_str(), 0); }
+	int getInt() { if(factorType != F_TYPE_INT) return 0; return std::strtol(value.c_str(), 0, 0); }
 
 protected:
 	std::string value;
