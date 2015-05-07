@@ -1526,9 +1526,9 @@ CTinyJS::CTinyJS()
 	root->addChild("String", stringClass);
 	root->addChild("Array", arrayClass);
 	root->addChild("Object", objectClass);
-	addNative("__array_(argString)", &createArrayNative, this);
-	addNative("__object_(argString)", &createObjectNative, this);
-	addNative("__new_(argString)", &keywordNewNative, this);
+	addNative("function __array_(argString)", &createArrayNative, this);
+	addNative("function __object_(argString)", &createObjectNative, this);
+	addNative("function __new_(argString)", &keywordNewNative, this);
 }
 
 CTinyJS::~CTinyJS()
@@ -1660,7 +1660,10 @@ void CTinyJS::addNative(const string &funcDesc, JSCallback ptr, void *userdata)
 
 	l->match(LEX_R_FUNCTION);
 	string funcName = l->tkStr;
-	l->match(LEX_ID);
+	if(l->tk == LEX_R_RESERVED)	 /* Allow for the defining of the three special functions */
+		l->match(LEX_R_RESERVED);
+	else
+		l->match(LEX_ID);
 	/* Check for dots, we might want to do something like function String.substring ... */
 	while (l->tk == '.')
 	{
@@ -1951,6 +1954,9 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
 	{
 		// new -> create a new object
 		l->match(LEX_R_NEW);
+		CScriptVarLink* objLink = new CScriptVarLink(keywordNew(execute, l));
+		objLink->var->unref(); // unref the extra safety ref added in keywordNew()
+		return objLink;
 	}
 	// Nothing we can do here... just hope it's the end...
 	l->match(LEX_EOF);
@@ -2024,9 +2030,14 @@ void CTinyJS::createArrayNative(CScriptVar* root, void* userData)
 	delete lexer;
 }
 
+// make sure to unref the return value from this function AFTER
+// adding it to a CScriptVarLink
 CScriptVar* CTinyJS::keywordNew(bool& execute, CScriptLex* lexer)
 {
 	CScriptVar *obj = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
+	// we need to keep a link to our object to prevent it from getting
+	// cleaned during the function parsing.
+	CScriptVarLink* objLink = new CScriptVarLink(obj);
 	if(execute)
 	{
 		const string &className = l->tkStr;
@@ -2060,6 +2071,12 @@ CScriptVar* CTinyJS::keywordNew(bool& execute, CScriptLex* lexer)
 			l->match(')');
 		}
 	}
+	// if the refs of our variable ever drop to zero,
+	// we end up in a Right Mess. ref() the object so that
+	// it doesn't get exploded, then remember to unref it 
+	// in the calling code.
+	obj->ref();
+	CLEAN(objLink);
 	return obj;
 }
 
@@ -2067,7 +2084,9 @@ void CTinyJS::keywordNewNative(CScriptVar* root, void* userData)
 {
 	CScriptLex* lexer = new CScriptLex(root->findChild("argString")->var->getString());
 	bool execute = true; // how tedious
-	root->setReturnVar(((CTinyJS*)userData)->keywordNew(execute, lexer));
+	CScriptVar* obj = ((CTinyJS*)userData)->keywordNew(execute, lexer);
+	root->setReturnVar(obj);
+	obj->unref(); // prevent a memory leak; unref the extra safety ref that was added in keywordNew()
 	delete lexer;
 }
 
