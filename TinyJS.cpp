@@ -120,6 +120,7 @@
   */
 
 #include "TinyJS.h"
+#include "TinyJS_SyntaxTree.h"
 #include <assert.h>
 
 #define ASSERT(X) assert(X)
@@ -831,30 +832,28 @@ CScriptVar::CScriptVar()
 	refs = 0;
 #if DEBUG_MEMORY
 	mark_allocated(this);
-#endif
-	init();
+#endif		
+	firstChild = 0;
+	lastChild = 0;
+	flags = 0;
+	jsCallback = 0;
+	jsCallbackUserData = 0;
+	data = TINYJS_BLANK_DATA;
+	intData = 0;
+	doubleData = 0;
+	executions = 0;
 	flags = SCRIPTVAR_UNDEFINED;
 }
 
-CScriptVar::CScriptVar(const string &str)
+CScriptVar::CScriptVar(const string &str) : CScriptVar()
 {
-	refs = 0;
-#if DEBUG_MEMORY
-	mark_allocated(this);
-#endif
-	init();
 	flags = SCRIPTVAR_STRING;
 	data = str;
 }
 
 
-CScriptVar::CScriptVar(const string &varData, int varFlags)
+CScriptVar::CScriptVar(const string &varData, int varFlags) : CScriptVar()
 {
-	refs = 0;
-#if DEBUG_MEMORY
-	mark_allocated(this);
-#endif
-	init();
 	flags = varFlags;
 	if (varFlags & SCRIPTVAR_INTEGER)
 	{
@@ -868,23 +867,13 @@ CScriptVar::CScriptVar(const string &varData, int varFlags)
 		data = varData;
 }
 
-CScriptVar::CScriptVar(double val)
+CScriptVar::CScriptVar(double val) : CScriptVar()
 {
-	refs = 0;
-#if DEBUG_MEMORY
-	mark_allocated(this);
-#endif
-	init();
 	setDouble(val);
 }
 
-CScriptVar::CScriptVar(int val)
+CScriptVar::CScriptVar(int val) : CScriptVar()
 {
-	refs = 0;
-#if DEBUG_MEMORY
-	mark_allocated(this);
-#endif
-	init();
 	setInt(val);
 }
 
@@ -894,18 +883,6 @@ CScriptVar::~CScriptVar(void)
 	mark_deallocated(this);
 #endif
 	removeAllChildren();
-}
-
-void CScriptVar::init()
-{
-	firstChild = 0;
-	lastChild = 0;
-	flags = 0;
-	jsCallback = 0;
-	jsCallbackUserData = 0;
-	data = TINYJS_BLANK_DATA;
-	intData = 0;
-	doubleData = 0;
 }
 
 CScriptVar *CScriptVar::getReturnVar()
@@ -1515,8 +1492,9 @@ int CScriptVar::getRefs()
 
 // ----------------------------------------------------------------------------------- CSCRIPT
 
-CTinyJS::CTinyJS()
+CTinyJS::CTinyJS(int executions_before_compile)
 {
+	executions_to_compile = executions_before_compile;
 	l = 0;
 	root = (new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT))->ref();
 	// Add built-in classes
@@ -1616,6 +1594,7 @@ CScriptVarLink CTinyJS::evaluateComplex(const string &code)
 #endif
 		msg << " at " << l->getPosition();
 		delete l;
+		delete e;
 		l = oldLex;
 
 		throw new CScriptException(msg.str());
@@ -1719,6 +1698,12 @@ CScriptVarLink *CTinyJS::functionCall(bool &execute, CScriptVarLink *function, C
 			errorMsg = errorMsg + function->name + "' to be a function";
 			throw new CScriptException(errorMsg.c_str());
 		}
+		if(executions_to_compile && !function->var->isNative() &&
+			function->var->getExecutions() >= executions_to_compile)
+		{
+			// we've executed this function enough to justify compiling it
+			compile(function);
+		}
 		l->match('(');
 		// create a new symbol table entry for execution of this function
 		CScriptVar *functionRoot = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_FUNCTION);
@@ -1761,6 +1746,7 @@ CScriptVarLink *CTinyJS::functionCall(bool &execute, CScriptVarLink *function, C
 		{
 			ASSERT(function->var->jsCallback);
 			function->var->jsCallback(functionRoot, function->var->jsCallbackUserData);
+			function->var->addExecution(); // might as well keep track, might be useful
 		}
 		else
 		{
@@ -2088,6 +2074,19 @@ void CTinyJS::keywordNewNative(CScriptVar* root, void* userData)
 	root->setReturnVar(obj);
 	obj->unref(); // prevent a memory leak; unref the extra safety ref that was added in keywordNew()
 	delete lexer;
+}
+
+void CTinyJS::compile(CScriptVarLink* function)
+{
+	ASSERT(function->var->isFunction());
+
+	// first, build the syntax tree
+	ostringstream json;
+	function->var->getJSON(json);
+	CScriptSyntaxTree* stree = new CScriptSyntaxTree(json.str());
+	stree->parse();
+	
+	// then, ???
 }
 
 CScriptVarLink *CTinyJS::unary(bool &execute)

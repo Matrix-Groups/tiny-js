@@ -7,14 +7,23 @@
 CScriptSyntaxTree::CScriptSyntaxTree(CScriptLex* lexer)
 { 
 	this->lexer = lexer;
+	lexerOwned = false;
 	root = 0;
 }
 
+CScriptSyntaxTree::CScriptSyntaxTree(std::string& buffer)
+{
+	this->lexer = new CScriptLex(buffer);
+	lexerOwned = true;
+	root = 0;
+}
 
 CScriptSyntaxTree::~CScriptSyntaxTree()
 {
 	if(root)
 		delete root;
+	if(lexerOwned)
+		delete lexer;
 }
 
 void CScriptSyntaxTree::parse()
@@ -75,7 +84,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 	{
 		std::string tokenName = lexer->tkStr;
 		lexer->match(LEX_ID);
-		CSyntaxExpression* a;
+		CSyntaxExpression* a = 0;
 		while(lexer->tk == '(' || lexer->tk == '.' || lexer->tk == '[')
 		{
 			if(lexer->tk == '(')
@@ -98,6 +107,9 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 			}
 			else ASSERT(0);
 		}
+		// likely the lhs of an assignment (or rhs, really)
+		if(!a)
+			a = new CSyntaxID(tokenName);
 		return a;
 	}
 	if(lexer->tk == LEX_INT || lexer->tk == LEX_FLOAT)
@@ -288,7 +300,7 @@ CSyntaxExpression* CScriptSyntaxTree::base()
 {
 	CSyntaxExpression* lhs = ternary();
 	if(lexer->tk == '=' || lexer->tk == LEX_PLUSEQUAL || lexer->tk == LEX_MINUSEQUAL)
-	{																 
+	{					
 		int op = lexer->tk;
 		lexer->match(lexer->tk);
 		CSyntaxExpression* rhs = base();
@@ -347,8 +359,8 @@ CSyntaxNode* CScriptSyntaxTree::statement()
 	else if(lexer->tk == LEX_R_VAR)
 	{
 		lexer->match(LEX_R_VAR);
-		CSyntaxSequence* stmts;
-		CSyntaxAssign* stmt;
+		CSyntaxSequence* stmts = 0;
+		CSyntaxAssign* stmt = 0;
 		while(lexer->tk != ';')
 		{
 			CSyntaxExpression* lhs = new CSyntaxID(lexer->tkStr);
@@ -369,10 +381,8 @@ CSyntaxNode* CScriptSyntaxTree::statement()
 			if(lexer->tk != ';')
 			{
 				lexer->match(',');
-				if(stmt)
-					stmts = new CSyntaxSequence(stmts, stmt);
-				else
-					delete lhs;
+				stmts = new CSyntaxSequence(stmts, stmt ? lhs : stmt);
+				stmt = 0;
 			}
 		}
 		lexer->match(';');
@@ -395,11 +405,8 @@ CSyntaxNode* CScriptSyntaxTree::statement()
 	}
 	else if(lexer->tk == LEX_R_WHILE)
 	{
-		// We do repetition by pulling out the string representing our statement
-		// there's definitely some opportunity for optimisation here
 		lexer->match(LEX_R_WHILE);
 		lexer->match('(');
-		int whileCondStart = lexer->tokenStart;
 		CSyntaxExpression* cond = base();
 		lexer->match(')');
 		CSyntaxNode* body = statement();
@@ -547,13 +554,25 @@ CSyntaxFactor::CSyntaxFactor(std::string val)
 {
 	value = val;
 	node = 0;
+
+	char f = value.front();
+	if(f == '"')
+		factorType = F_TYPE_STRING;
+	else if(isdigit(f))
+	{
+		if(value.find('.') != std::string::npos)
+			factorType = F_TYPE_DOUBLE;
+		else
+			factorType = F_TYPE_INT;
+	}
+	else
+		factorType = F_TYPE_IDENTIFIER;
 }
 
 CSyntaxID::CSyntaxID(std::string id) : CSyntaxFactor(id) { }
 
 CSyntaxFunction::CSyntaxFunction(CSyntaxID* name, std::vector<CSyntaxID*>& arguments, CSyntaxStatement* body)
 {
-	ASSERT(name);
 	ASSERT(body);
 	this->name = name;
 	this->arguments = arguments;
@@ -562,9 +581,11 @@ CSyntaxFunction::CSyntaxFunction(CSyntaxID* name, std::vector<CSyntaxID*>& argum
 
 CSyntaxFunction::~CSyntaxFunction()
 {
-	delete name;
+	if(name)
+		delete name;
 	for(CSyntaxID* arg : arguments)
-		delete arg;
+		if(arg)
+			delete arg;
 }
 
 CSyntaxAssign::CSyntaxAssign(int op, CSyntaxExpression* lvalue, CSyntaxExpression* rvalue)

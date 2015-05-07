@@ -77,10 +77,23 @@ private:
 class CSyntaxFactor : public CSyntaxExpression
 {
 public:
+	enum FACTOR_TYPES
+	{
+		F_TYPE_INT = 1,
+		F_TYPE_DOUBLE = 2,
+		F_TYPE_STRING = 4,
+		F_TYPE_IDENTIFIER = 8
+	};
 	CSyntaxFactor(std::string val);
+
+	bool isValueType() { return factorType & (F_TYPE_INT | F_TYPE_DOUBLE | F_TYPE_STRING); }
+	std::string getRawValue() { return value; }
+	double getDouble() { if(factorType != F_TYPE_DOUBLE) return getInt(); return strtod(value.c_str(), 0); }
+	int getInt() { if(factorType != F_TYPE_INT) return 0; return strtol(value.c_str(), 0, 0); }
 
 protected:
 	std::string value;
+	int factorType;
 };
 
 class CSyntaxID	: public CSyntaxFactor
@@ -157,6 +170,8 @@ public:
 	CSyntaxBinaryOperator(int op, CSyntaxExpression* left, CSyntaxExpression* right);
 	~CSyntaxBinaryOperator();
 
+	bool canBeLval() { return op == '.' || op == '['; }
+
 private:
 	int op;
 	CSyntaxExpression* right;
@@ -187,12 +202,14 @@ class CScriptSyntaxTree
 {
 public:
 	CScriptSyntaxTree(CScriptLex* lexer);
+	CScriptSyntaxTree(std::string& buffer);
 	~CScriptSyntaxTree();
 
 	void parse();
 
 protected:
 	CScriptLex* lexer;
+	bool lexerOwned;
 	CSyntaxNode* root;
 
 	// taken from TinyJS.h

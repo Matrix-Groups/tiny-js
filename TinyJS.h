@@ -286,7 +286,7 @@ protected:
 
 class CTinyJS {
 public:
-    CTinyJS();
+    CTinyJS(int executions_before_compile = 30);
     ~CTinyJS();
 
     void execute(const std::string &code);
@@ -328,6 +328,7 @@ public:
 
     CScriptVar *root;   /// root of symbol table
 private:
+	int executions_to_compile;
     CScriptLex *l;             /// current lexer
     std::vector<CScriptVar*> scopes; /// stack of scopes when parsing
 #ifdef TINYJS_CALL_STACK
@@ -370,7 +371,9 @@ private:
 	static void createObjectNative(CScriptVar* root, void* impl);
 	static void createArrayNative(CScriptVar* root, void* impl);
 	static void keywordNewNative(CScriptVar* root, void* impl);
-	
+
+	/* Compiles a function into native code. */
+	void compile(CScriptVarLink* function);
 };
 
 #endif
