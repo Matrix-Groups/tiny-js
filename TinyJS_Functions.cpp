@@ -32,6 +32,7 @@
 #include <math.h>
 #include <cstdlib>
 #include <sstream>
+#include <algorithm>
 
 using namespace std;
 // ----------------------------------------------- Actual Functions
@@ -179,30 +180,65 @@ void scArrayContains(CScriptVar *c, void *data) {
   c->getReturnVar()->setInt(contains);
 }
 
-void scArrayRemove(CScriptVar *c, void *data) {
-  CScriptVar *obj = c->getParameter("obj");
-  vector<int> removedIndices;
-  CScriptVarLink *v;
-  // remove
-  for(auto& it : c->getParameter("this")->children)
-  {
-	  v = it.second;
-      if (v->var->equals(obj)) {
-        removedIndices.push_back(v->getIntName());
-      }					   
-  }
-  // renumber
-  for(auto& it : c->getParameter("this")->children)
-  {
-	  v = it.second;
-      int n = v->getIntName();
-      int newn = n;
-      for (size_t i=0;i<removedIndices.size();i++)
-        if (n>=removedIndices[i])
-          newn--;
-      if (newn!=n)
-        v->setIntName(newn);
-  }
+void scArrayRemove(CScriptVar *c, void *data)
+{
+	// The implementation for this function is straight garbage.
+	// There has to be a better way to keep the linked list and map
+	// synced up, as well as keep link names and keys consistent, but 
+	// I was unable to come up with one. This may be in part because 
+	// the linked-list based algorithm only worked because of implementation
+	// details and left extra children in the array, and this algorithm
+	// is more or less based on that one.
+	CScriptVar *obj = c->getParameter("obj");
+	vector<int> removedIndices;
+	vector<CScriptVarLink*> children;
+	// remove
+	CScriptVar* var = c->getParameter("this");
+	children = var->orderedChildren();
+	for(auto& child: children)
+	{
+		if(child->var->equals(obj))
+		{
+			removedIndices.push_back(child->getIntName());
+			var->removeLink(child); // this also deletes the link
+		}
+	}
+	if(removedIndices.empty())
+		return;
+
+	// refetch the list of children since some have been deleted
+	children = var->orderedChildren();
+	// renumber
+	for(auto& child: children)
+	{
+		int n = child->getIntName();
+		int newn = n;
+		for(size_t i = 0; i < removedIndices.size(); i++)
+			if(n >= removedIndices[i])
+				newn--;
+		if(newn != n)
+		{
+			child->setIntName(newn);
+			// fix up keys in the map
+			CScriptVarLink* link = var->addChildNoDup(child->name, child->var);
+			link->name = child->name;
+		}
+	}
+	// we need to eliminate children that are stale
+	// (ie children whose name does not match their key)
+	// however we cannot do that while iterating over the map
+	children.clear(); // reuse children
+	for(auto& pair : var->children)
+		if(pair.first != pair.second->name)
+		{
+			// it is impossible to delete an element using the
+			// given methods if the link's name does not match
+			// the key's name.
+			pair.second->name = pair.first;
+			children.push_back(pair.second);
+		}
+	for(auto& child : children)
+		var->removeLink(child);
 }
 
 void scArrayJoin(CScriptVar *c, void *data) {

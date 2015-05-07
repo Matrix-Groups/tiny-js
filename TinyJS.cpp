@@ -834,6 +834,7 @@ CScriptVar::CScriptVar()
 	mark_allocated(this);
 #endif		
 	lastChild = 0;
+	firstChild = 0;
 	flags = 0;
 	jsCallback = 0;
 	jsCallbackUserData = 0;
@@ -952,23 +953,26 @@ CScriptVarLink *CScriptVar::addChild(const std::string &childName, CScriptVar *c
 	link->owned = true;
 	if (!children.empty())
 	{
-		lastChild->nextSibling = link;
-		link->prevSibling = lastChild;
-		lastChild = link;
 		// can't use a raw replace because that would lead to dropping
 		// the pointer on the floor
 		CScriptVarLink* oldChild = findChild(childName);
 		if(oldChild)
 		{
 			oldChild->replaceWith(link);
-			return link;
+			delete link;
+			return oldChild;
 		}
 		else
+		{
+			lastChild->nextSibling = link;
+			link->prevSibling = lastChild;
+			lastChild = link;
 			return children[childName] = link;
+		}
 	}
 	else
 	{
-		lastChild = link;
+		lastChild = firstChild = link;
 		return children[childName] = link;
 	}
 }
@@ -1001,6 +1005,8 @@ void CScriptVar::removeLink(CScriptVarLink *link)
 		link->nextSibling->prevSibling = link->prevSibling;
 	if(link->prevSibling)
 		link->prevSibling->nextSibling = link->nextSibling;
+	if(firstChild == link)
+		firstChild = link->nextSibling;
 	if(lastChild == link)
 		lastChild = link->prevSibling;
 	delete link;
@@ -1377,12 +1383,12 @@ string CScriptVar::getParsableString()
 	{
 		ostringstream funcStr;
 		funcStr << "function (";
-		// get list of parameters
-		for(auto it = children.begin(); it != children.end();)
+		// get list of parameters	
+		CScriptVarLink *link = firstChild;
+		while(link)
 		{
-			CScriptVarLink *link = it->second;
 			funcStr << link->name;
-			if (++it != children.end()) funcStr << ",";
+			if(link = link->nextSibling) funcStr << ",";
 		}
 		// add function body
 		funcStr << ") " << getString();
@@ -1403,14 +1409,14 @@ void CScriptVar::getJSON(ostringstream &destination, const string linePrefix)
 		string indentedLinePrefix = linePrefix + "  ";
 		// children - handle with bracketed list
 		destination << "{ \n";
-		for(auto it = children.begin(); it != children.end();)
+		CScriptVarLink *link = firstChild;
+		while(link)
 		{
-			CScriptVarLink *link = it->second;
 			destination << indentedLinePrefix;
 			destination << getJSString(link->name);
 			destination << " : ";
 			link->var->getJSON(destination, indentedLinePrefix);
-			if (++it != children.end())
+			if (link = link->nextSibling)
 			{
 				destination << ",\n";
 			}
@@ -1444,6 +1450,18 @@ void CScriptVar::setCallback(JSCallback callback, void *userdata)
 {
 	jsCallback = callback;
 	jsCallbackUserData = userdata;
+}
+
+std::vector<CScriptVarLink*> CScriptVar::orderedChildren()
+{
+	std::vector<CScriptVarLink*> output;
+	CScriptVarLink* v = firstChild;
+	while(v)
+	{
+		output.push_back(v);
+		v = v->nextSibling;
+	}
+	return output;
 }
 
 CScriptVar *CScriptVar::ref()
@@ -1686,10 +1704,10 @@ CScriptVarLink *CTinyJS::functionCall(bool &execute, CScriptVarLink *function, C
 		CScriptVar *functionRoot = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_FUNCTION);
 		if (parent)
 			functionRoot->addChildNoDup("this", parent);
-		// grab in all parameters
-		for(auto& it: function->var->children)
+		// grab in all parameters	  
+		CScriptVarLink* v = function->var->firstChild;
+		while(v)
 		{
-			CScriptVarLink* v = it.second;
 			CScriptVarLink *value = base(execute);
 			if (execute)
 			{
@@ -1706,6 +1724,7 @@ CScriptVarLink *CTinyJS::functionCall(bool &execute, CScriptVarLink *function, C
 			}
 			CLEAN(value);
 			if (l->tk != ')') l->match(',');
+			v = v->nextSibling;
 		}
 		l->match(')');
 		// setup a return variable

@@ -41,7 +41,7 @@
 #endif
 #include <string>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #ifndef TRACE
 #define TRACE printf
@@ -258,7 +258,8 @@ public:
     void getJSON(std::ostringstream &destination, const std::string linePrefix=""); ///< Write out all the JS code needed to recreate this script variable to the stream (as JSON)
     void setCallback(JSCallback callback, void *userdata); ///< Set the callback for native functions
 
-	std::map<std::string, CScriptVarLink*> children;
+	std::unordered_map<std::string, CScriptVarLink*> children;
+	std::vector<CScriptVarLink*> orderedChildren();	///< Returns a vector of the children of this variable ordered by most recently added last
 
     /// For memory management/garbage collection
     CScriptVar *ref(); ///< Add reference to this variable
@@ -275,12 +276,11 @@ protected:
     JSCallback jsCallback; ///< Callback for native functions
     void *jsCallbackUserData; ///< user data passed as second argument to native functions
 
-    void init(); ///< initialisation of data members
-
     /** Copy the basic data and flags from the variable given, with no
       * children. Should be used internally only - by copyValue and deepCopy */
     void copySimpleData(CScriptVar *val);
 
+	CScriptVarLink* firstChild; ///< used for ordered iteration through children (function defs, etc)
 	CScriptVarLink* lastChild; ///< only used to maintain script link linked list
 
     friend class CTinyJS;
