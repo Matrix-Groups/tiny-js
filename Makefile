@@ -6,6 +6,7 @@ SOURCES= \
 TinyJS.cpp \
 TinyJS_Functions.cpp \
 TinyJS_MathFunctions.cpp \
+TinyJS_SyntaxTree.cpp
 
 
 OBJECTS=$(SOURCES:.cpp=.o)
