@@ -51,7 +51,8 @@ void js_print(CScriptVar *v, void *userdata)
 
 int main(int argc, char **argv)
 {
-	CTinyJS *js = new CTinyJS();
+	// we want to test profiling, so force functions to always compile after the first execution
+	CTinyJS *js = new CTinyJS(1);
 	/* add the functions from TinyJS_Functions.cpp */
 	registerFunctions(js);
 	registerMathFunctions(js);

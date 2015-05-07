@@ -218,6 +218,7 @@ bool run_test(const char *filename) {
     s.execute(buffer);
   } catch (CScriptException *e) {
     printf("ERROR: %s\n", e->text.c_str());
+	delete e;
   }
   bool pass = s.root->getParameter("result")->getBool();
 
