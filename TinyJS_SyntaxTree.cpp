@@ -1,8 +1,13 @@
 #include "TinyJS_SyntaxTree.h"
 #include <string.h>
+#include <algorithm>
 #include <assert.h>
 
 #define ASSERT(X) assert(X)
+// if this flag is enabled, the constructors of CSyntax constructs
+// will ensure that the simplifying assumptions they make in their 
+// emit() methods are not violated
+#define CHECK_SYNTAX_TREE
 
 CScriptSyntaxTree::CScriptSyntaxTree(CScriptLex* lexer)
 { 
@@ -36,6 +41,13 @@ void CScriptSyntaxTree::parse()
 		root = stmts->second();
 	else
 		root = stmts;
+}
+
+void CScriptSyntaxTree::compile(std::ostream & out)
+{
+	if(!(CSyntaxFunction*)root)
+		TRACE("Warning: the root of this syntax tree is not a function definition. Compiled code may not function correctly.\n");
+	root->emit(out);
 }
 
 std::vector<CSyntaxExpression*> CScriptSyntaxTree::functionCall()
@@ -89,7 +101,10 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		{
 			if(lexer->tk == '(')
 			{ 
-				a = new CSyntaxFunctionCall(a ? a : new CSyntaxID(tokenName), functionCall());
+				int argStart = lexer->tokenStart;
+				auto args = functionCall();
+				std::string argString = lexer->getSubString(argStart);
+				a = new CSyntaxFunctionCall(a ? a : new CSyntaxID(tokenName), args, argString);
 			}
 			else if(lexer->tk == '.')
 			{ 
@@ -139,7 +154,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		lexer->match('}');
 		// "__obj_()" is a special native function that constructs an object from a string
 		return new CSyntaxFunctionCall(new CSyntaxID("__obj_"), std::vector<CSyntaxExpression*>(1,
-			new CSyntaxFactor(arg.c_str())));
+			new CSyntaxFactor(arg.c_str())), arg.c_str());
 	}
 	if(lexer->tk == '[')
 	{
@@ -154,7 +169,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		lexer->match(']');
 		arg += ']';
 		return new CSyntaxFunctionCall(new CSyntaxID("__array_"), std::vector<CSyntaxExpression*>(1,
-			new CSyntaxFactor(arg.c_str())));
+			new CSyntaxFactor(arg.c_str())), arg.c_str());
 	}
 	if(lexer->tk == LEX_R_FUNCTION)
 	{
@@ -179,7 +194,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		lexer->match(')');
 		arg += ')';
 		return new CSyntaxFunctionCall(new CSyntaxID("__new_"), std::vector<CSyntaxExpression*>(1,
-			new CSyntaxFactor(arg.c_str())));
+			new CSyntaxFactor(arg.c_str())), arg.c_str());
 	}
 	// Nothing we can do here... just hope it's the end...
 	lexer->match(LEX_EOF);
@@ -229,7 +244,9 @@ CSyntaxExpression* CScriptSyntaxTree::expression()
 		lexer->match(lexer->tk);
 		if(op == LEX_PLUSPLUS || op == LEX_MINUSMINUS)
 		{
-			a = new CSyntaxUnaryOperator(op, a);
+			// more desugaring
+			a = new CSyntaxAssign('=', a, 
+				new CSyntaxBinaryOperator(op == LEX_PLUSPLUS ? '+' : '-', a, new CSyntaxFactor("1")));
 		}
 		else
 		{
@@ -327,7 +344,19 @@ CSyntaxStatement* CScriptSyntaxTree::block()
 	lexer->match('{');
 	CSyntaxSequence* stmts = 0;
 	while(lexer->tk && lexer->tk != '}')
-		stmts = new CSyntaxSequence(stmts, statement());
+	{
+		CSyntaxNode* stmt = statement();
+		CSyntaxSequence* seq = dynamic_cast<CSyntaxSequence*>(stmt);
+		if(seq)
+		{
+			std::vector<CSyntaxNode*> statements = seq->normalize();
+			delete seq;
+			for(auto& stmt2 : statements)
+				stmts = new CSyntaxSequence(stmts, stmt2);
+		}
+		else
+			stmts = new CSyntaxSequence(stmts, stmt);
+	}
 	lexer->match('}');
 	return stmts;
 }
@@ -360,7 +389,7 @@ CSyntaxNode* CScriptSyntaxTree::statement()
 	{
 		lexer->match(LEX_R_VAR);
 		CSyntaxSequence* stmts = 0;
-		CSyntaxAssign* stmt = 0;
+		CSyntaxNode* stmt = 0;
 		while(lexer->tk != ';')
 		{
 			CSyntaxExpression* lhs = new CSyntaxID(lexer->tkStr);
@@ -376,14 +405,18 @@ CSyntaxNode* CScriptSyntaxTree::statement()
 			if(lexer->tk == '=')
 			{
 				lexer->match('=');
-				stmt = new CSyntaxAssign('=', lhs, base());
+				stmt = new CSyntaxDefinition(lhs, base());
 			}
+			else
+				stmt = new CSyntaxDefinition(lhs, NULL);
 			if(lexer->tk != ';')
 			{
 				lexer->match(',');
-				stmts = new CSyntaxSequence(stmts, stmt ? lhs : stmt);
+				stmts = new CSyntaxSequence(stmts, stmt ? stmt : lhs);
 				stmt = 0;
 			}
+			else if(stmts)
+				stmts = new CSyntaxSequence(stmts, stmt ? stmt : lhs);
 		}
 		lexer->match(';');
 		return stmts ? stmts : (CSyntaxNode*)stmt;
@@ -486,20 +519,105 @@ CSyntaxSequence::CSyntaxSequence(CSyntaxNode* front, CSyntaxNode* last)
 {
 	node = front;
 	this->last = last;
+	disowned = false;
+#ifdef CHECK_SYNTAX_TREE
+	ASSERT(this->last && !dynamic_cast<CSyntaxSequence*>(this->last));
+	ASSERT(this->node || this->last);
+#endif
 }
 
 CSyntaxSequence::~CSyntaxSequence()
 {
-	if(last)
+	// make sure to still delete sequences
+	if(disowned)
+	{
+		if(node && !dynamic_cast<CSyntaxSequence*>(node))
+			node = 0;
+		if(last && dynamic_cast<CSyntaxSequence*>(last))
+			delete last;
+	}
+	else if(last)
 		delete last;
 }
 
-CSyntaxEval::CSyntaxEval(CSyntaxExpression* expr)
+std::vector<CSyntaxNode*> CSyntaxSequence::normalize(bool disown_children)
 {
-	ASSERT(expr);
-	node = expr;
+	disowned = disown_children;
+	std::vector<CSyntaxNode*> stmts;
+	CSyntaxSequence* child;
+	if(node)
+	{
+		if(child = dynamic_cast<CSyntaxSequence*>(node))
+		{
+			std::vector<CSyntaxNode*> children = child->normalize(disown_children);
+			stmts.insert(stmts.end(), children.begin(), children.end());
+		}
+		else
+			stmts.push_back(node);
+	}
+	if(last)
+	{
+		if(child = dynamic_cast<CSyntaxSequence*>(last))
+		{
+			std::vector<CSyntaxNode*> children = child->normalize(disown_children);
+			stmts.insert(stmts.end(), children.begin(), children.end());
+		}
+		else
+			stmts.push_back(last);
+	}
+	return stmts;
 }
 
+// this function assumes that the tree of sequencing is entirely left-heavy;
+// ie the structure is:
+//    left := sequence|statement|null
+//    right := statement
+// enable the compile-time constant CHECK_SYNTAX_TREE to confirm this
+void CSyntaxSequence::emit(std::ostream & out, const std::string indentation)
+{
+	std::vector<CSyntaxSequence*> parents;
+	CSyntaxNode* n = node;
+	CSyntaxSequence* seq;
+	while(seq = dynamic_cast<CSyntaxSequence*>(n))
+	{
+		parents.push_back(seq);
+		n = seq->node;
+	}
+	while(!parents.empty())
+	{
+		seq = *parents.rbegin();
+		parents.pop_back();
+		if(seq->node && !dynamic_cast<CSyntaxSequence*>(seq->node))
+		{
+			seq->node->emit(out, indentation);
+			if(seq->node->semicolonizable())
+				out << ";";
+			out << "\n";
+		}
+		if(seq->last)
+		{
+			seq->last->emit(out, indentation);
+			if(seq->last->semicolonizable())
+				out << ";";
+			out << "\n";
+		}
+	}
+	if(node && !dynamic_cast<CSyntaxSequence*>(node))
+	{
+		node->emit(out, indentation);
+		if(node->semicolonizable())
+			out << ";";
+		out << "\n";
+	}
+	if(last)
+	{
+		last->emit(out, indentation);
+		if(last->semicolonizable())
+			out << ";";
+		out << "\n";
+	}
+}
+									
 CSyntaxIf::CSyntaxIf(CSyntaxExpression* expr, CSyntaxNode* body, CSyntaxNode* else_)
 {
 	ASSERT(expr);
@@ -518,6 +636,21 @@ CSyntaxIf::~CSyntaxIf()
 		delete else_;
 }
 
+void CSyntaxIf::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation << "if(";
+	expr->emit(out);
+	out << "->getBool()) {\n";
+	node->emit(out, indentation + "    ");
+	out << "\n" << indentation << "} ";
+	if(else_)
+	{
+		out << "else {\n";
+		else_->emit(out, indentation + "    ");
+		out << indentation << "}";
+	}
+}
+
 CSyntaxWhile::CSyntaxWhile(CSyntaxExpression* expr, CSyntaxNode* body)
 {
 	ASSERT(body);
@@ -529,6 +662,15 @@ CSyntaxWhile::CSyntaxWhile(CSyntaxExpression* expr, CSyntaxNode* body)
 CSyntaxWhile::~CSyntaxWhile()
 {
 	delete expr;
+}
+
+void CSyntaxWhile::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation << "while(";
+	expr->emit(out);
+	out << "->getBool()) {\n";
+	node->emit(out, indentation + "    ");
+	out << indentation << "}";
 }
 
 CSyntaxFor::CSyntaxFor(CSyntaxNode* init, CSyntaxExpression* expr, CSyntaxExpression* update, CSyntaxNode* body)
@@ -550,6 +692,29 @@ CSyntaxFor::~CSyntaxFor()
 		delete cond;
 }
 
+void CSyntaxFor::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation << "for(";
+	if(init)
+	{
+		init->emit(out);		
+	}
+	out << "; ";
+	if(cond)
+	{
+		cond->emit(out);
+		out << "->getBool()";
+	}
+	out << "; ";
+	if(update)
+	{
+		update->emit(out);
+	}
+	out << ") {\n";
+	node->emit(out, indentation + "    ");
+	out << indentation << "}";
+}
+
 CSyntaxFactor::CSyntaxFactor(std::string val)
 {
 	value = val;
@@ -569,7 +734,35 @@ CSyntaxFactor::CSyntaxFactor(std::string val)
 		factorType = F_TYPE_IDENTIFIER;
 }
 
+void CSyntaxFactor::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation;
+	out << "temp = new CScriptVar(";
+	switch(factorType)
+	{
+	case F_TYPE_INT:
+		out << getInt();
+		break;
+	case F_TYPE_DOUBLE:
+		out << getDouble();
+		break;
+	case F_TYPE_STRING:
+		out << "\"" << value.c_str() << "\"";
+		break;
+	case F_TYPE_IDENTIFIER:
+		out << value.c_str();
+		break;
+	}
+	out << ")";
+}
+
 CSyntaxID::CSyntaxID(std::string id) : CSyntaxFactor(id) { }
+
+void CSyntaxID::emit(std::ostream & out, const std::string indentation)
+{
+	// this is not correct
+	out << indentation << value.c_str();
+}
 
 CSyntaxFunction::CSyntaxFunction(CSyntaxID* name, std::vector<CSyntaxID*>& arguments, CSyntaxStatement* body)
 {
@@ -588,6 +781,48 @@ CSyntaxFunction::~CSyntaxFunction()
 			delete arg;
 }
 
+void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation << "void ";
+	getName()->emit(out);
+	out << "(CScriptVar* root, void* userData) {\n";
+	// setup a temp scriptvar variable for general use
+	out << indentation + "    " << "CScriptVar* temp;\n";
+	out << indentation + "    " << "CTinyJS* js = (CTinyJS*)userData;\n";
+	for(auto& arg: arguments)
+	{
+		// setup variable declarations/assignments
+		out << indentation + "    " << "CScriptVarLink* ";
+		arg->emit(out);
+		out << " = root->getParameter(\"";
+		arg->emit(out);
+		out << "\");\n";
+	}
+	node->emit(out, indentation + "    ");
+	out << "\n" << indentation << "}\n";
+}
+
+CSyntaxID* CSyntaxFunction::getName()
+{
+	if(!name)
+		generateRandomId();
+	return name;
+}
+
+void CSyntaxFunction::generateRandomId()
+{
+	// generate a random (likely unused) identifier so that this function is not unnamed
+	static const char alphanum[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		"abcdefghijklmnopqrstuvwxyz";
+	std::string randomId = "";
+	for(int i = 0; i < 20; ++i)
+	{
+		randomId += alphanum[rand() % (sizeof(alphanum) - 1)];
+	}
+	name = new CSyntaxID(randomId);
+}
+
 CSyntaxAssign::CSyntaxAssign(int op, CSyntaxExpression* lvalue, CSyntaxExpression* rvalue)
 {
 	ASSERT(lvalue);
@@ -600,6 +835,13 @@ CSyntaxAssign::CSyntaxAssign(int op, CSyntaxExpression* lvalue, CSyntaxExpressio
 CSyntaxAssign::~CSyntaxAssign()
 {
 	delete lval;
+}
+
+void CSyntaxAssign::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation << lval->lvaluePath() << "->replaceWith(";
+	node->emit(out);
+	out << "->var)";
 }
 
 CSyntaxTernaryOperator::CSyntaxTernaryOperator(int op, CSyntaxExpression* cond, CSyntaxExpression* b1, CSyntaxExpression* b2)
@@ -619,8 +861,25 @@ CSyntaxTernaryOperator::~CSyntaxTernaryOperator()
 	delete b2;
 }
 
+void CSyntaxTernaryOperator::emit(std::ostream & out, const std::string indentation)
+{
+	// op can only be '?'
+	ASSERT(op == '?');
+	out << indentation;
+	node->emit(out);
+	out << " ? ";
+	b1->emit(out);
+	out << " : ";
+	b2->emit(out);
+}
+
 CSyntaxRelation::CSyntaxRelation(int rel, CSyntaxExpression* left, CSyntaxExpression* right)
 	: CSyntaxBinaryOperator(rel, left, right) { }
+
+void CSyntaxRelation::emit(std::ostream & out, const std::string indentation)
+{
+	CSyntaxBinaryOperator::emit(out);
+}
 
 CSyntaxBinaryOperator::CSyntaxBinaryOperator(int op, CSyntaxExpression* left, CSyntaxExpression* right)
 {
@@ -636,10 +895,61 @@ CSyntaxBinaryOperator::~CSyntaxBinaryOperator()
 	delete right;
 }
 
+void CSyntaxBinaryOperator::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation;
+	node->emit(out);
+	out << "->var->mathsOp(";
+	right->emit(out);
+	out << ", " << CScriptLex::getTokenStr(op) << ")";
+}
+
+std::string CSyntaxBinaryOperator::lvaluePath()
+{
+	if(op == '.')
+		return ((CSyntaxExpression*)node)->lvaluePath() + "." + right->lvaluePath();
+	else if(op == '[')
+	{
+		generateRandomID();
+		return ((CSyntaxExpression*)node)->lvaluePath() + "_array__" + randomArrayName;
+	}
+	ASSERT(0);
+	return std::string();
+}
+
+void CSyntaxBinaryOperator::generateRandomID()
+{
+	if(randomArrayName.length() != 0)
+		return;
+
+	// generate a random (likely unused) identifier so that this function is not unnamed
+	static const char alphanum[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		"abcdefghijklmnopqrstuvwxyz";
+	std::string randomId = "";
+	for(int i = 0; i < 5; ++i)
+	{
+		randomId += alphanum[rand() % (sizeof(alphanum) - 1)];
+	}
+	randomArrayName = randomId;
+}
+
 CSyntaxUnaryOperator::CSyntaxUnaryOperator(int op, CSyntaxExpression* expr)
 {
 	this->op = op;
 	node = expr;
+}
+
+void CSyntaxUnaryOperator::emit(std::ostream & out, const std::string indentation)
+{
+	// normally, you would have to check to see if the operators we're talking about
+	// are prefix or postfix operators; however, in TinyJS.cpp::111-112 it is mentioned
+	// that postfix operators work as prefix operators, and prefix operators don't exist.
+	// so, placing the unary operator always at the beginning happens to preserve behavior!
+	// also, I don't currenly use prefix/postfix operators due to desugaring
+	out << indentation;
+	out << CScriptLex::getTokenStr(op, true);
+	node->emit(out);
 }
 
 CSyntaxReturn::CSyntaxReturn(CSyntaxExpression* value)
@@ -647,20 +957,84 @@ CSyntaxReturn::CSyntaxReturn(CSyntaxExpression* value)
 	node = value;
 }
 
+void CSyntaxReturn::emit(std::ostream & out, const std::string indentation)
+{
+	out << indentation;
+	out << "root->setReturnVar(";
+	// todo: ensure this returns a CScriptVar or CScriptVarLink
+	node->emit(out);
+	out << "->var)";
+}
+
 CSyntaxCondition::CSyntaxCondition(int op, CSyntaxExpression* left, CSyntaxExpression* right)
 	: CSyntaxBinaryOperator(op, left, right) { }
 
-CSyntaxNew::CSyntaxNew(CSyntaxExpression* name, std::vector<CSyntaxExpression*>& arguments)
-	: CSyntaxFunctionCall(name, arguments) { }
-
-CSyntaxFunctionCall::CSyntaxFunctionCall(CSyntaxExpression* name, std::vector<CSyntaxExpression*> arguments)
+void CSyntaxCondition::emit(std::ostream & out, const std::string indentation)
+{
+	CSyntaxBinaryOperator::emit(out);
+}
+		
+CSyntaxFunctionCall::CSyntaxFunctionCall(CSyntaxExpression* name, 
+	std::vector<CSyntaxExpression*> arguments, std::string originalArguments)
 {
 	node = name;
 	actuals = arguments;
+	args = originalArguments;
 }
 
 CSyntaxFunctionCall::~CSyntaxFunctionCall()
 {
 	for(CSyntaxExpression* arg : actuals)
 		delete arg;
+}
+
+void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation)
+{
+	// we have to call back into the interpreter to make function calls.
+	// the exception is recursive calls; we can set those up ourselves.
+	// however, setting up a recursive call is a non-trivial amount of work
+	// (clear the symbol table for function root, set up new parameters in the
+	// symbol table, ensure "this" gets set up if necessary and not accidentally
+	// unref'd), and since function calls to ourselves can appear in a non-tail
+	// position (ie as part of an expression), it's a little bit of extra work
+	// to set up a recursive call.
+	// so, for now, just make an interpreter call
+
+	// evaluateComplex returns a CScriptVarLink (but not a pointer), so pointer-ize
+	// it to make sure the expression returns a CScriptVarLink*. This isn't a memory
+	// leak because the CScriptVarLink will still be deconstructed when it goes out
+	// of scope here.
+	out << indentation << "&js->evaluateComplex(\"";
+	node->emit(out);
+	// args includes parenthesis
+	out << args << "\")";
+}
+
+CSyntaxDefinition::CSyntaxDefinition(CSyntaxExpression * lvalue, CSyntaxExpression * rvalue)
+{
+	ASSERT(lvalue);
+	lval = lvalue;
+	node = rvalue;
+}
+
+CSyntaxDefinition::~CSyntaxDefinition()
+{
+	delete lval;
+}
+
+void CSyntaxDefinition::emit(std::ostream & out, const std::string indentation)
+{
+	// this doesn't work with array indexing, although it IS
+	// illegal to use an array index with "var"
+	std::string lvalPath = lval->lvaluePath();
+	out << indentation << "CScriptVarLink* ";
+	out << lvalPath << " = " << "root->findChildOrCreateByPath(\"";
+	std::replace(lvalPath.begin(), lvalPath.end(), '.', '_');
+	out << lvalPath << "\")";
+	if(node)
+	{
+		out << "->replaceWith(";
+		node->emit(out);
+		out << ")";
+	}
 }

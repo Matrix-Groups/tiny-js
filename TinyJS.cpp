@@ -109,9 +109,7 @@
 		   Recursive loops of data such as a.foo = a; fail to be garbage collected
 		   length variable cannot be set
 		   The postfix increment operator returns the current value, not the previous as it should.
-		   There is no prefix increment operator
-		   Arrays are implemented as a linked list - hence a lookup time is O(n)
-
+		   There is no prefix increment operator									   
 	 TODO:
 		   Utility va-args style function in TinyJS for executing a function directly
 		   Merge the parsing of expressions/statements so eval("statement") works like we'd expect.
@@ -135,6 +133,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <stdio.h>
+#include <fstream>
 
 using namespace std;
 
@@ -371,12 +370,18 @@ void CScriptLex::match(int expected_tk)
 	getNextToken();
 }
 
-string CScriptLex::getTokenStr(int token)
+string CScriptLex::getTokenStr(int token, bool raw_tokens)
 {
 	if (token > 32 && token < 128)
 	{
 		char buf[4] = "' '";
-		buf[1] = (char)token;
+		if(raw_tokens)
+		{
+			buf[0] = (char)token;
+			buf[1] = '\0';
+		}
+		else
+			buf[1] = (char)token;
 		return buf;
 	}
 	switch (token)
@@ -422,6 +427,7 @@ string CScriptLex::getTokenStr(int token)
 	case LEX_R_NULL: return "null";
 	case LEX_R_UNDEFINED: return "undefined";
 	case LEX_R_NEW: return "new";
+	case LEX_R_RESERVED: return "(internally reserved token)";
 	}
 
 	ostringstream msg;
@@ -799,19 +805,21 @@ CScriptVarLink::~CScriptVarLink()
 	var->unref();
 }
 
-void CScriptVarLink::replaceWith(CScriptVar *newVar)
+CScriptVarLink* CScriptVarLink::replaceWith(CScriptVar *newVar)
 {
 	CScriptVar *oldVar = var;
 	var = newVar->ref();
 	oldVar->unref();
+	return this;
 }
 
-void CScriptVarLink::replaceWith(CScriptVarLink *newVar)
+CScriptVarLink* CScriptVarLink::replaceWith(CScriptVarLink *newVar)
 {
 	if (newVar)
 		replaceWith(newVar->var);
 	else
 		replaceWith(new CScriptVar());
+	return this;
 }
 
 int CScriptVarLink::getIntName()
@@ -2077,11 +2085,23 @@ void CTinyJS::compile(CScriptVarLink* function)
 
 	// first, build the syntax tree
 	ostringstream json;
-	function->var->getJSON(json);
+	json << "function " << function->name << "(";
+	// get list of parameters	
+	CScriptVarLink *link = function->var->firstChild;
+	while(link)
+	{
+		json << link->name;
+		if(link = link->nextSibling) json << ",";
+	}
+	// add function body
+	json << ") " << function->var->getString();
 	CScriptSyntaxTree* stree = new CScriptSyntaxTree(json.str());
 	stree->parse();
 	
-	// then, ???
+	ofstream outfile;
+	outfile.open("jit.c", ios::trunc);
+	stree->compile(outfile);
+	outfile.close();
 }
 
 CScriptVarLink *CTinyJS::unary(bool &execute)

@@ -149,7 +149,7 @@ public:
     std::string tkStr; ///< Data contained in the token we have here
 
     void match(int expected_tk); ///< Lexical match wotsit
-    static std::string getTokenStr(int token); ///< Get the string representation of the given token
+    static std::string getTokenStr(int token, bool raw_tokens = false); ///< Get the string representation of the given token
     void reset(); ///< Reset this lex so we can start again
 
     std::string getSubString(int pos); ///< Return a sub-string from the given position up until right now
@@ -189,8 +189,10 @@ public:
   CScriptVarLink(const CScriptVarLink &link); ///< Copy constructor
   ~CScriptVarLink(); 
 
-  void replaceWith(CScriptVar *newVar); ///< Replace the Variable pointed to
-  void replaceWith(CScriptVarLink *newVar); ///< Replace the Variable pointed to (just dereferences)
+  // both versions of "replaceWith" return "this". This seems like a sort of
+  // intuitive thing to do, and it helps for emitting interesting JIT code.
+  CScriptVarLink* replaceWith(CScriptVar *newVar); ///< Replace the Variable pointed to
+  CScriptVarLink* replaceWith(CScriptVarLink *newVar); ///< Replace the Variable pointed to (just dereferences)
   int getIntName(); ///< Get the name as an integer (for arrays)
   void setIntName(int n); ///< Set the name as an integer (for arrays)
 };
@@ -322,7 +324,7 @@ public:
     CScriptVar *getScriptVariable(const std::string &path);
     /// Get the value of the given variable, or return 0
     const std::string *getVariable(const std::string &path);
-    /// set the value of the given variable, return trur if it exists and gets set
+    /// set the value of the given variable, return true if it exists and gets set
     bool setVariable(const std::string &path, const std::string &varData);
 
     /// Send all variables to stdout
