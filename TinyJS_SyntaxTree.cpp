@@ -801,7 +801,7 @@ void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
     out << indentation << "extern \"C\" {\n";
     std::string realIndent = indentation + "    ";
     out << realIndent << "void ";
-    getName()->emit(out, realIndent);
+    getName()->emit(out);
     out << "(CScriptVar* root, void* userData) {\n";
     // to avoid memory leaks, we need a structure to hold any newly allocated CScriptVarLink*s.
     // we need to mangle the name of any locals so as to avoid name collisions

@@ -43,6 +43,13 @@
 #include <vector>
 #include <unordered_map>
 
+#ifdef _MSC_VER
+#include <windows.h>
+#define LIBHANDLE HMODULE
+#else
+#define LIBHANDLE void*
+#endif
+
 #ifndef TRACE
 #define TRACE printf
 #endif // TRACE
@@ -274,6 +281,7 @@ public:
 protected:
     int refs; ///< The number of references held to this - used for garbage collection
     int executions; ///< The number of times this function has been executed (if this is a function)
+    LIBHANDLE nativeHandle; ///< The handle to a jit-code compiled library
 
     std::string data; ///< The contents of this variable if it is a string
     long intData; ///< The contents of this variable if it is an int

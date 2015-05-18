@@ -134,9 +134,25 @@
 #include <cstdlib>
 #include <stdio.h>
 #include <fstream>
+
+// support both windows and linux
 #ifdef _MSC_VER
+#include <windows.h>
+
+#define GETLIB(a,b) LoadLibrary(a)
+#define GETSYMBOL(a,b) GetProcAddress(a, b)
+#define LIBNAME ".\\jit.dll"
+#define GETBUILDERROR "Load failed with 0x%x\n", GetLastError() 
+#define FREELIB(a) FreeLibrary(a)
+#define RTLD_NOW 0
 #else
-#include <dlfcn.h>
+#include <dlfcn.h>   
+
+#define GETLIB(a,b) dlopen(a, b)
+#define GETSYMBOL(a,b) dlsym(a, b)
+#define LIBNAME "./jit.so"
+#define GETBUILDERROR "%s\n", dlerror()
+#define FREELIB(a) dlclose(a)
 #endif
 
 using namespace std;
@@ -868,6 +884,7 @@ CScriptVar::CScriptVar()
     intData = 0;
     doubleData = 0;
     executions = 0;
+    nativeHandle = 0;
     flags = SCRIPTVAR_UNDEFINED;
 }
 
@@ -909,6 +926,8 @@ CScriptVar::~CScriptVar(void)
     mark_deallocated(this);
 #endif
     removeAllChildren();
+    if(nativeHandle)
+        FREELIB(nativeHandle);
 }
 
 CScriptVar *CScriptVar::getReturnVar()
@@ -2108,28 +2127,39 @@ void CTinyJS::compile(CScriptVarLink* function)
     outfile.open("jit.cpp", ios::trunc);
     stree->compile(outfile);
     outfile.close();
+    // yes, yes, it's a system() call, blah blah blah
 #ifdef _MSC_VER
+    // ship off the actual compilation to cl.exe
+    // this line is a hell of a doozy. it's made longer by the fact that
+    // the development environment has to be activated with this bat script.
+    // Note that the version hard-coded here uses a D drive and VS2015; tweak to fit
+    // your build environment. 
+    // Also, without the redirection at the end, two lines of output will be displayed
+    // by cl during compile and there appears to be no way to make it compile quietly.
+    // Additionally, it doesn't output to err, only stdout, so even if there are errors
+    // it doesn't help at all.
+    // Once again, it goes without saying that TinyJS.h must be in the same (working) directory
+    // as the executable, and Debug\tiny-js.lib must also exist. 
+    system("%comspec% /c \"\"d:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x86 && cl.exe /nologo /D_USRDLL /D_WINDLL /EHsc /Zi /nologo /FI TinyJS.h jit.cpp Debug\\tiny-js.lib /MDd /LDd /link /DLL /OUT:jit.dll /EXPORT:\"fib\"\" > nul");
 #else
     // ship off the actual compilation to gcc for now
-    // yes, yes, it's a system call, blah blah blah
     // it goes without saying that this only works if the executable
     // has libtinyjs.so and TinyJS.h in its working directory and gcc
     // on PATH.
     system("gcc -g -Wall -D_DEBUG -std=c++11 -fPIC -include TinyJS.h -L./libtinyjs -shared -o jit.so jit.cpp");
-    // open the newly built library (this is why we needed -ldl)
-    void* handle = dlopen("./jit.so", RTLD_NOW);
+#endif
+    // open the newly built library
+    LIBHANDLE handle = GETLIB(LIBNAME, RTLD_NOW);
     if(!handle)
     {
-        TRACE("%s\n", dlerror());
+        TRACE(GETBUILDERROR);
         return;
     }
-    JSCallback callback = (JSCallback)dlsym(handle, function->name.c_str());
+    JSCallback callback = (JSCallback)GETSYMBOL(handle, function->name.c_str());
+
     function->var->setCallback(callback, this);
     function->var->flags |= SCRIPTVAR_NATIVE;
-    // technically, we should keep track of the handle in the function variable
-    // and close it when the variable is deleted, but this is a temporary thing
-    // so I'm not too concerned right now.
-#endif
+    function->var->nativeHandle = handle;
 }
 
 CScriptVarLink *CTinyJS::unary(bool &execute)
