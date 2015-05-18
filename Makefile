@@ -1,6 +1,6 @@
 CC=g++
 CFLAGS=-g -Wall -D_DEBUG -std=c++11 -rdynamic
-LDFLAGS=-g
+LDFLAGS=-g -ldl
 
 LIBS=libtinyjs.so
 
