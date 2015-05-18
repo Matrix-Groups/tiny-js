@@ -21,7 +21,7 @@ function run() {
 	print("Running factorial - " + NUM_ITERATIONS + " iterations; computing factorial(" + MAX_FACT + ") each time.");
 
 	for(var i = 0; i < NUM_ITERATIONS; i++)
-		fib(MAX_FACT);
+		factorial(MAX_FACT);
 
 	return "factorial()";
 }

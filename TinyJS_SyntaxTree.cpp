@@ -2,6 +2,7 @@
 #include <string.h>
 #include <algorithm>
 #include <assert.h>
+#include <sstream>
 
 #define ASSERT(X) assert(X)
 // if this flag is enabled, the constructors of CSyntax constructs
@@ -9,11 +10,20 @@
 // emit() methods are not violated
 #define CHECK_SYNTAX_TREE
 
+// these three macros are used to avoid memory leaking in JIT-ed code. 
+#define FUNCTION_VECTOR_NAME "__t_"
+#define NO_LEAK_BEGIN() (std::string("*") + FUNCTION_VECTOR_NAME + ".insert(" + FUNCTION_VECTOR_NAME + ".end(), ")
+#define NO_LEAK_END() (")")
+// this is used as a placeholder to store things so that they can be pointerized
+// during emitting a function call
+#define FUNCTION_VALUE_PLACEHOLDER_NAME "__p_"
+
 CScriptSyntaxTree::CScriptSyntaxTree(CScriptLex* lexer)
 { 
 	this->lexer = lexer;
 	lexerOwned = false;
 	root = 0;
+
 }
 
 CScriptSyntaxTree::CScriptSyntaxTree(const std::string& buffer)
@@ -94,6 +104,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 	}
 	if(lexer->tk == LEX_ID)
 	{
+		int nameStart = lexer->tokenStart;
 		std::string tokenName = lexer->tkStr;
 		lexer->match(LEX_ID);
 		CSyntaxExpression* a = 0;
@@ -101,9 +112,10 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		{
 			if(lexer->tk == '(')
 			{ 
+				std::string argString = lexer->getSubString(nameStart);
 				int argStart = lexer->tokenStart;
 				auto args = functionCall();
-				std::string argString = lexer->getSubString(argStart);
+				argString += lexer->getSubString(argStart);
 				a = new CSyntaxFunctionCall(a ? a : new CSyntaxID(tokenName), args, argString);
 			}
 			else if(lexer->tk == '.')
@@ -147,14 +159,14 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		// compile string
 		while(lexer->tk != '}')
 		{
-			arg += lexer->tkStr;
+			arg += lexer->tkStr.size() ? lexer->tkStr : std::string(1, (char)lexer->tk);
 			lexer->match(lexer->tk);
 		}
 		arg += "}";
 		lexer->match('}');
 		// "__obj_()" is a special native function that constructs an object from a string
 		return new CSyntaxFunctionCall(new CSyntaxID("__obj_"), std::vector<CSyntaxExpression*>(1,
-			new CSyntaxFactor(arg.c_str())), arg.c_str());
+			new CSyntaxFactor(arg.c_str())), "__obj_(\"" + arg + "\")");
 	}
 	if(lexer->tk == '[')
 	{
@@ -169,7 +181,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		lexer->match(']');
 		arg += ']';
 		return new CSyntaxFunctionCall(new CSyntaxID("__array_"), std::vector<CSyntaxExpression*>(1,
-			new CSyntaxFactor(arg.c_str())), arg.c_str());
+			new CSyntaxFactor(arg.c_str())), "__array_(\"" + arg + "\")");
 	}
 	if(lexer->tk == LEX_R_FUNCTION)
 	{
@@ -194,7 +206,7 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
 		lexer->match(')');
 		arg += ')';
 		return new CSyntaxFunctionCall(new CSyntaxID("__new_"), std::vector<CSyntaxExpression*>(1,
-			new CSyntaxFactor(arg.c_str())), arg.c_str());
+			new CSyntaxFactor(arg.c_str())), "__new_" + arg);
 	}
 	// Nothing we can do here... just hope it's the end...
 	lexer->match(LEX_EOF);
@@ -305,6 +317,7 @@ CSyntaxExpression* CScriptSyntaxTree::ternary()
 	CSyntaxExpression* lhs = logic();
 	if(lexer->tk == '?')
 	{
+		lexer->match('?');
 		CSyntaxExpression* b1 = base();
 		lexer->match(':');
 		lhs = new CSyntaxTernaryOperator('?', lhs, b1, base());
@@ -642,7 +655,7 @@ void CSyntaxIf::emit(std::ostream & out, const std::string indentation)
 	expr->emit(out);
 	out << "->getBool()) {\n";
 	node->emit(out, indentation + "    ");
-	out << "\n" << indentation << "} ";
+	out << indentation << "} ";
 	if(else_)
 	{
 		out << "else {\n";
@@ -737,7 +750,8 @@ CSyntaxFactor::CSyntaxFactor(std::string val)
 void CSyntaxFactor::emit(std::ostream & out, const std::string indentation)
 {
 	out << indentation;
-	out << "temp = new CScriptVar(";
+	out << NO_LEAK_BEGIN();
+	out << "new CScriptVarLink(new CScriptVar(";
 	switch(factorType)
 	{
 	case F_TYPE_INT:
@@ -753,7 +767,8 @@ void CSyntaxFactor::emit(std::ostream & out, const std::string indentation)
 		out << value.c_str();
 		break;
 	}
-	out << ")";
+	out << "))";
+	out << NO_LEAK_END();
 }
 
 CSyntaxID::CSyntaxID(std::string id) : CSyntaxFactor(id) { }
@@ -786,9 +801,15 @@ void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
 	out << indentation << "void ";
 	getName()->emit(out);
 	out << "(CScriptVar* root, void* userData) {\n";
-	// setup a temp scriptvar variable for general use
-	out << indentation + "    " << "CScriptVar* temp;\n";
-	out << indentation + "    " << "CTinyJS* js = (CTinyJS*)userData;\n";
+	// to avoid memory leaks, we need a structure to hold any newly allocated CScriptVarLink*s.
+	// we need to mangle the name of any locals so as to avoid name collisions
+	// (however, if any variables in the function were named "__temps_", this would
+	// generate bad code due to a redeclaration). 
+	// thus, we should endeavor to declare as little extra as possible.
+	out << indentation + "    " << "std::vector<CScriptVarLink*> " << FUNCTION_VECTOR_NAME << ";\n";
+	// we also need a value-type CScriptVarLink, because evaluateComplex() returns a 
+	// non-pointer and we need to normalize it into a pointer.
+	out << indentation + "    " << "CScriptVarLink " << FUNCTION_VALUE_PLACEHOLDER_NAME << ";\n";
 	for(auto& arg: arguments)
 	{
 		// setup variable declarations/assignments
@@ -799,7 +820,10 @@ void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
 		out << "\");\n";
 	}
 	node->emit(out, indentation + "    ");
-	out << "\n" << indentation << "}\n";
+	// cleanup
+	out << indentation + "    " << "for(CScriptVarLink* __to_del_: " << FUNCTION_VECTOR_NAME << ")\n";
+	out << indentation + "        " << "delete __to_del_;\n";
+	out << indentation << "}\n";
 }
 
 CSyntaxID* CSyntaxFunction::getName()
@@ -839,7 +863,9 @@ CSyntaxAssign::~CSyntaxAssign()
 
 void CSyntaxAssign::emit(std::ostream & out, const std::string indentation)
 {
-	out << indentation << lval->lvaluePath() << "->replaceWith(";
+	out << indentation;
+	lval->emit(out);
+	out << "->replaceWith(";
 	node->emit(out);
 	out << "->var)";
 }
@@ -853,6 +879,9 @@ CSyntaxTernaryOperator::CSyntaxTernaryOperator(int op, CSyntaxExpression* cond, 
 	node = cond;
 	this->b1 = b1;
 	this->b2 = b2;
+#ifdef CHECK_SYNTAX_TREE
+	ASSERT(op == '?');
+#endif
 }
 
 CSyntaxTernaryOperator::~CSyntaxTernaryOperator()
@@ -864,10 +893,9 @@ CSyntaxTernaryOperator::~CSyntaxTernaryOperator()
 void CSyntaxTernaryOperator::emit(std::ostream & out, const std::string indentation)
 {
 	// op can only be '?'
-	ASSERT(op == '?');
 	out << indentation;
 	node->emit(out);
-	out << " ? ";
+	out << "->getBool() ? ";
 	b1->emit(out);
 	out << " : ";
 	b2->emit(out);
@@ -888,6 +916,10 @@ CSyntaxBinaryOperator::CSyntaxBinaryOperator(int op, CSyntaxExpression* left, CS
 	this->op = op;
 	node = left;
 	this->right = right;
+#ifdef CHECK_SYNTAX_TREE
+	// right side has to be an ID
+	ASSERT(op != '.' || dynamic_cast<CSyntaxID*>(right));
+#endif
 }
 
 CSyntaxBinaryOperator::~CSyntaxBinaryOperator()
@@ -898,10 +930,37 @@ CSyntaxBinaryOperator::~CSyntaxBinaryOperator()
 void CSyntaxBinaryOperator::emit(std::ostream & out, const std::string indentation)
 {
 	out << indentation;
-	node->emit(out);
-	out << "->var->mathsOp(";
-	right->emit(out);
-	out << ", " << CScriptLex::getTokenStr(op) << ")";
+	if(op != '[' && op != '.')
+	{
+		out << NO_LEAK_BEGIN();
+		out << "new CScriptVarLink(";
+		node->emit(out);
+		out << "->var->mathsOp(";
+		right->emit(out);
+		out << "->var, " << op << "))";
+		out << NO_LEAK_END();
+	}
+	else
+	{
+		// beautifully enough, this will return a CScriptVarLink*, which can be used as
+		// /either/ an lvalue OR an rvalue depending on the calling code's fancy!
+		// The more I work on this code, the more I begin to think that it was actually
+		// fairly well designed.	  
+		node->emit(out);
+		out << "->var->findChildOrCreate(";
+		if(op == '.')
+		{
+			out << '"';
+			right->emit(out);
+			out << '"';
+		}
+		else
+		{
+			right->emit(out);
+			out << "->var->getString()";
+		}
+		out << ")";
+	}
 }
 
 std::string CSyntaxBinaryOperator::lvaluePath()
@@ -975,11 +1034,11 @@ void CSyntaxCondition::emit(std::ostream & out, const std::string indentation)
 }
 		
 CSyntaxFunctionCall::CSyntaxFunctionCall(CSyntaxExpression* name, 
-	std::vector<CSyntaxExpression*> arguments, std::string originalArguments)
+	std::vector<CSyntaxExpression*> arguments, std::string originalString)
 {
 	node = name;
 	actuals = arguments;
-	args = originalArguments;
+	origString = originalString;
 }
 
 CSyntaxFunctionCall::~CSyntaxFunctionCall()
@@ -998,16 +1057,24 @@ void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation
 	// unref'd), and since function calls to ourselves can appear in a non-tail
 	// position (ie as part of an expression), it's a little bit of extra work
 	// to set up a recursive call.
-	// so, for now, just make an interpreter call
+	// so, for now, just make an interpreter call.
 
-	// evaluateComplex returns a CScriptVarLink (but not a pointer), so pointer-ize
-	// it to make sure the expression returns a CScriptVarLink*. This isn't a memory
-	// leak because the CScriptVarLink will still be deconstructed when it goes out
-	// of scope here.
-	out << indentation << "&js->evaluateComplex(\"";
-	node->emit(out);
-	// args includes parenthesis
-	out << args << "\")";
+	// evaluateComplex returns a CScriptVarLink (but not a pointer), so assign it to
+	// our local placeholder and immediately take the reference of it so that this
+	// expression returns a CScriptVarLink*.
+	
+	// CSyntaxFunction::emit() doesn't set up a local CTinyJS variable because it
+	// is only used here and we want to avoid accidental redeclarations of variables.
+	out << indentation << "&(" << FUNCTION_VALUE_PLACEHOLDER_NAME << " = ((CTinyJS*)userData)->evaluateComplex(\"";
+	// we need to escape quotes
+	std::string str = origString;
+	int pos = 0;
+	while((pos = str.find_first_of('"', pos)) != std::string::npos)
+	{
+		str.insert(str.begin() + pos, '\\');
+		pos += 2; // make sure to skip past both the \ and the " to avoid infinite loops
+	}
+	out << str << "\"))";
 }
 
 CSyntaxDefinition::CSyntaxDefinition(CSyntaxExpression * lvalue, CSyntaxExpression * rvalue)

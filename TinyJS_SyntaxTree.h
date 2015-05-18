@@ -159,7 +159,7 @@ public:
 
 protected:
 	std::vector<CSyntaxExpression*> actuals;
-	std::string args;
+	std::string origString;
 };
 
 class CSyntaxReturn : public CSyntaxStatement

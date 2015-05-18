@@ -1,8 +1,9 @@
 // Bubble sort
 
 function sort(array) {
-	for(var i = 0; i < array.length-1; i++) {
-		for(var j = i; j < array.length; j++) {
+	var a_len = array.length;
+	for(var i = 0; i < a_len-1; i++) {
+		for(var j = i; j < a_len; j++) {
 			if(array[i] > array[j]) {
 				var temp = array[j];
 				array[j] = array[i];

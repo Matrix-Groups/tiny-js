@@ -926,6 +926,10 @@ CScriptVarLink *CScriptVar::findChild(const string &childName)
 	auto v = children.find(childName);
 	if(v != children.end())
 		return v->second;
+	if(childName == "length" && isArray())
+		return new CScriptVarLink(new CScriptVar(getArrayLength()));
+	if(childName == "length" && isString())
+		return new CScriptVarLink(new CScriptVar((int)getString().size()));
 	return 0;
 }
 
@@ -1869,26 +1873,10 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
 				{
 					const string &name = l->tkStr;
 					CScriptVarLink *child = a->var->findChild(name);
-					if (!child) child = findInParentClasses(a->var, name);
+					if (!child) 
+						child = findInParentClasses(a->var, name);
 					if (!child)
-					{
-						/* if we haven't found this defined yet, use the built-in
-						   'length' properly */
-						if (a->var->isArray() && name == "length")
-						{
-							int l = a->var->getArrayLength();
-							child = new CScriptVarLink(new CScriptVar(l));
-						}
-						else if (a->var->isString() && name == "length")
-						{
-							int l = a->var->getString().size();
-							child = new CScriptVarLink(new CScriptVar(l));
-						}
-						else
-						{
-							child = a->var->addChild(name);
-						}
-					}
+						child = a->var->addChild(name);
 					parent = a->var;
 					a = child;
 				}
