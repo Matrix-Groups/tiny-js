@@ -46,102 +46,102 @@ using std::string;
 
 void js_print(CScriptVar *v, void *userdata)
 {
-	printf("> %s\n", v->getParameter("text")->getString().c_str());
+    printf("> %s\n", v->getParameter("text")->getString().c_str());
 }
 
 int main(int argc, char **argv)
 {
-	// we want to test profiling, so force functions to always compile after the first execution
-	CTinyJS *js = new CTinyJS(1);
-	/* add the functions from TinyJS_Functions.cpp */
-	registerFunctions(js);
-	registerMathFunctions(js);
-	/* Add a native function */
-	js->addNative("function print(text)", &js_print, 0);
-	/* Execute out bit of code - we could call 'evaluate' here if
-	   we wanted something returned */
+    // we want to test profiling, so force functions to always compile after the first execution
+    CTinyJS *js = new CTinyJS(1);
+    /* add the functions from TinyJS_Functions.cpp */
+    registerFunctions(js);
+    registerMathFunctions(js);
+    /* Add a native function */
+    js->addNative("function print(text)", &js_print, 0);
+    /* Execute out bit of code - we could call 'evaluate' here if
+       we wanted something returned */
 
-	if(argc < 2)
-	{
-		if(argc > 0)
-			printf("Usage: ./%s profile.js [NAME=VALUE...]\n", argv[0]);
-		else
-			printf("Usage: ./run_profiler profile.js [NAME=VALUE...]\n");
-		printf("       profile.js: Name of file to run.\n");
-		printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file");
-		return 1;
-	}
+    if(argc < 2)
+    {
+        if(argc > 0)
+            printf("Usage: ./%s profile.js [NAME=VALUE...]\n", argv[0]);
+        else
+            printf("Usage: ./run_profiler profile.js [NAME=VALUE...]\n");
+        printf("       profile.js: Name of file to run.\n");
+        printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file");
+        return 1;
+    }
 
-	const char* filename = argv[1];
-	struct stat results;
-	if(!stat(filename, &results) == 0)
-	{
-		printf("Cannot stat file! '%s'\n", filename);
-		return false;
-	}
-	int size = results.st_size;
-	FILE *file = fopen(filename, "rb");
-	/* if we open as text, the number of bytes read may be > the size we read */
-	if(!file)
-	{
-		printf("Unable to open file! '%s'\n", filename);
-		return false;
-	}
-	char *buffer = new char[size + 1];
-	long actualRead = fread(buffer, 1, size, file);
-	buffer[actualRead] = 0;
-	buffer[size] = 0;
-	fclose(file);
+    const char* filename = argv[1];
+    struct stat results;
+    if(!stat(filename, &results) == 0)
+    {
+        printf("Cannot stat file! '%s'\n", filename);
+        return false;
+    }
+    int size = results.st_size;
+    FILE *file = fopen(filename, "rb");
+    /* if we open as text, the number of bytes read may be > the size we read */
+    if(!file)
+    {
+        printf("Unable to open file! '%s'\n", filename);
+        return false;
+    }
+    char *buffer = new char[size + 1];
+    long actualRead = fread(buffer, 1, size, file);
+    buffer[actualRead] = 0;
+    buffer[size] = 0;
+    fclose(file);
 
-	try
-	{
-		// read in definitions from the buffer
-		js->execute(buffer);
+    try
+    {
+        // read in definitions from the buffer
+        js->execute(buffer);
 
-		// initialize default script parameters
-		js->execute("init();");
+        // initialize default script parameters
+        js->execute("init();");
 
-		// set parameters from arguments
-		for(int i = 2; i < argc; i++)
-		{
-			int idx = 0;
-			while(argv[i][idx] != '=' && argv[i][idx] != '\0') idx++;
-			if(argv[i][idx] == '\0') continue;
+        // set parameters from arguments
+        for(int i = 2; i < argc; i++)
+        {
+            int idx = 0;
+            while(argv[i][idx] != '=' && argv[i][idx] != '\0') idx++;
+            if(argv[i][idx] == '\0') continue;
 
-			argv[i][idx++] = '\0';
-			// really, you might be fine just prepending "var " and appending ";" but
-			// might as well be safe
-			js->execute("var " + string(argv[i]) + "= (" + &(argv[i][idx]) + ");");
-		}
+            argv[i][idx++] = '\0';
+            // really, you might be fine just prepending "var " and appending ";" but
+            // might as well be safe
+            js->execute("var " + string(argv[i]) + "= (" + &(argv[i][idx]) + ");");
+        }
 
-		// run algorithm setup
-		js->execute("setup();");
+        // run algorithm setup
+        js->execute("setup();");
 
-		// start actual profiling
-		double tstart, tstop, ttime;
+        // start actual profiling
+        double tstart, tstop, ttime;
 
-		tstart = (double)clock() / CLOCKS_PER_SEC;
-		string functionName = js->evaluate("run();");
-		tstop = (double)clock() / CLOCKS_PER_SEC;
-		ttime = tstop - tstart;
+        tstart = (double)clock() / CLOCKS_PER_SEC;
+        string functionName = js->evaluate("run();");
+        tstop = (double)clock() / CLOCKS_PER_SEC;
+        ttime = tstop - tstart;
 
-		// get iterations
-		string iterations = js->evaluate("get_iterations();");
+        // get iterations
+        string iterations = js->evaluate("get_iterations();");
 
-		cout << "Profiled function " + functionName + "." << endl;
-		cout << "Ran " + functionName + " a total of " + iterations + " time(s)." << endl;
-		cout << "Total time elapsed: " << ttime << ". Time per execution: " << ttime / atoi(iterations.c_str()) << endl;
-	}  
-	catch(CScriptException *e)
-	{
-		printf("ERROR: %s\n", e->text.c_str());
-	}
+        cout << "Profiled function " + functionName + "." << endl;
+        cout << "Ran " + functionName + " a total of " + iterations + " time(s)." << endl;
+        cout << "Total time elapsed: " << ttime << ". Time per execution: " << ttime / atoi(iterations.c_str()) << endl;
+    }
+    catch(CScriptException *e)
+    {
+        printf("ERROR: %s\n", e->text.c_str());
+    }
 
-	delete js;
+    delete js;
 #ifdef _WIN32
 #ifdef _DEBUG
-	_CrtDumpMemoryLeaks();
+    _CrtDumpMemoryLeaks();
 #endif
 #endif
-	return 0;
+    return 0;
 }

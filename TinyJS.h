@@ -29,7 +29,7 @@
 #ifndef TINYJS_H
 #define TINYJS_H
 
-// If defined, this keeps a note of all calls and where from in memory. This is slower, but good for debugging
+ // If defined, this keeps a note of all calls and where from in memory. This is slower, but good for debugging
 #define TINYJS_CALL_STACK
 
 #ifdef _WIN32
@@ -47,7 +47,8 @@
 #define TRACE printf
 #endif // TRACE
 
-enum LEX_TYPES {
+enum LEX_TYPES
+{
     LEX_EOF = 0,
     LEX_ID = 256,
     LEX_INT,
@@ -91,32 +92,33 @@ enum LEX_TYPES {
     LEX_R_NULL,
     LEX_R_UNDEFINED,
     LEX_R_NEW,
-	LEX_R_RESERVED,	/* Used for reserved JIT-compile function names; these cannot appear in original source */
+    LEX_R_RESERVED,	/* Used for reserved JIT-compile function names; these cannot appear in original source */
 
-	LEX_R_LIST_END /* always the last entry */
+    LEX_R_LIST_END /* always the last entry */
 };
 
-enum SCRIPTVAR_FLAGS {
-    SCRIPTVAR_UNDEFINED   = 0,
-    SCRIPTVAR_FUNCTION    = 1,
-    SCRIPTVAR_OBJECT      = 2,
-    SCRIPTVAR_ARRAY       = 4,
-    SCRIPTVAR_DOUBLE      = 8,  // floating point double
-    SCRIPTVAR_INTEGER     = 16, // integer number
-    SCRIPTVAR_STRING      = 32, // string
-    SCRIPTVAR_NULL        = 64, // it seems null is its own data type
+enum SCRIPTVAR_FLAGS
+{
+    SCRIPTVAR_UNDEFINED = 0,
+    SCRIPTVAR_FUNCTION = 1,
+    SCRIPTVAR_OBJECT = 2,
+    SCRIPTVAR_ARRAY = 4,
+    SCRIPTVAR_DOUBLE = 8,  // floating point double
+    SCRIPTVAR_INTEGER = 16, // integer number
+    SCRIPTVAR_STRING = 32, // string
+    SCRIPTVAR_NULL = 64, // it seems null is its own data type
 
-    SCRIPTVAR_NATIVE      = 128, // to specify this is a native function
+    SCRIPTVAR_NATIVE = 128, // to specify this is a native function
     SCRIPTVAR_NUMERICMASK = SCRIPTVAR_NULL |
-                            SCRIPTVAR_DOUBLE |
-                            SCRIPTVAR_INTEGER,
+    SCRIPTVAR_DOUBLE |
+    SCRIPTVAR_INTEGER,
     SCRIPTVAR_VARTYPEMASK = SCRIPTVAR_DOUBLE |
-                            SCRIPTVAR_INTEGER |
-                            SCRIPTVAR_STRING |
-                            SCRIPTVAR_FUNCTION |
-                            SCRIPTVAR_OBJECT |
-                            SCRIPTVAR_ARRAY |
-                            SCRIPTVAR_NULL,
+    SCRIPTVAR_INTEGER |
+    SCRIPTVAR_STRING |
+    SCRIPTVAR_FUNCTION |
+    SCRIPTVAR_OBJECT |
+    SCRIPTVAR_ARRAY |
+    SCRIPTVAR_NULL,
 
 };
 
@@ -128,7 +130,8 @@ enum SCRIPTVAR_FLAGS {
 /// convert the given string into a quoted string suitable for javascript
 std::string getJSString(const std::string &str);
 
-class CScriptException {
+class CScriptException
+{
 public:
     std::string text;
     CScriptException(const std::string &exceptionText);
@@ -155,7 +158,7 @@ public:
     std::string getSubString(int pos); ///< Return a sub-string from the given position up until right now
     CScriptLex *getSubLex(int lastPosition); ///< Return a sub-lexer from the given position up until right now
 
-    std::string getPosition(int pos=-1); ///< Return a string representing the position in lines and columns of the character pos given
+    std::string getPosition(int pos = -1); ///< Return a string representing the position in lines and columns of the character pos given
 
 protected:
     /* When we go into a loop, we use getSubLex to get a lexer for just the sub-part of the
@@ -173,29 +176,29 @@ protected:
 
 class CScriptVar;
 
-typedef void (*JSCallback)(CScriptVar *var, void *userdata);
+typedef void(*JSCallback)(CScriptVar *var, void *userdata);
 typedef CScriptVar* (*NativeImpl)(bool& execute, CScriptLex* lexer);
 
 class CScriptVarLink
 {
 public:
-  std::string name;
-  CScriptVarLink *nextSibling;
-  CScriptVarLink *prevSibling;
-  CScriptVar *var;
-  bool owned;
+    std::string name;
+    CScriptVarLink *nextSibling;
+    CScriptVarLink *prevSibling;
+    CScriptVar *var;
+    bool owned;
 
-  CScriptVarLink(); // for use as an immediate (only used in jit code)
-  CScriptVarLink(CScriptVar *var, const std::string &name = TINYJS_TEMP_NAME);
-  CScriptVarLink(const CScriptVarLink &link); ///< Copy constructor
-  ~CScriptVarLink(); 
+    CScriptVarLink(); // for use as an immediate (only used in jit code)
+    CScriptVarLink(CScriptVar *var, const std::string &name = TINYJS_TEMP_NAME);
+    CScriptVarLink(const CScriptVarLink &link); ///< Copy constructor
+    ~CScriptVarLink();
 
-  // both versions of "replaceWith" return "this". This seems like a sort of
-  // intuitive thing to do, and it helps for emitting interesting JIT code.
-  CScriptVarLink* replaceWith(CScriptVar *newVar); ///< Replace the Variable pointed to
-  CScriptVarLink* replaceWith(CScriptVarLink *newVar); ///< Replace the Variable pointed to (just dereferences)
-  int getIntName(); ///< Get the name as an integer (for arrays)
-  void setIntName(int n); ///< Set the name as an integer (for arrays)
+    // both versions of "replaceWith" return "this". This seems like a sort of
+    // intuitive thing to do, and it helps for emitting interesting JIT code.
+    CScriptVarLink* replaceWith(CScriptVar *newVar); ///< Replace the Variable pointed to
+    CScriptVarLink* replaceWith(CScriptVarLink *newVar); ///< Replace the Variable pointed to (just dereferences)
+    int getIntName(); ///< Get the name as an integer (for arrays)
+    void setIntName(int n); ///< Set the name as an integer (for arrays)
 };
 
 /// Variable class (containing a doubly-linked list of children)
@@ -212,15 +215,15 @@ public:
     CScriptVar *getReturnVar(); ///< If this is a function, get the result value (for use by native functions)
     void setReturnVar(CScriptVar *var); ///< Set the result value. Use this when setting complex return data as it avoids a deepCopy()
     CScriptVar *getParameter(const std::string &name); ///< If this is a function, get the parameter with the given name (for use by native functions)
-	void addExecution(); ///< If this is a function, add one to the number of times its been executed
-	int getExecutions(); ///< If this is a function, get the number of times it's been executed
+    void addExecution(); ///< If this is a function, add one to the number of times its been executed
+    int getExecutions(); ///< If this is a function, get the number of times it's been executed
 
     CScriptVarLink *findChild(const std::string &childName); ///< Tries to find a child with the given name, may return 0
-    CScriptVarLink *findChildOrCreate(const std::string &childName, int varFlags=SCRIPTVAR_UNDEFINED); ///< Tries to find a child with the given name, or will create it with the given flags
+    CScriptVarLink *findChildOrCreate(const std::string &childName, int varFlags = SCRIPTVAR_UNDEFINED); ///< Tries to find a child with the given name, or will create it with the given flags
     CScriptVarLink *findChildOrCreateByPath(const std::string &path); ///< Tries to find a child with the given path (separated by dots)
-    CScriptVarLink *addChild(const std::string &childName, CScriptVar *child=NULL);
-    CScriptVarLink *addChildNoDup(const std::string &childName, CScriptVar *child=NULL); ///< add a child overwriting any with the same name
-    void removeChild(const std::string &childName, CScriptVar *child, bool throwIfMissing=false);
+    CScriptVarLink *addChild(const std::string &childName, CScriptVar *child = NULL);
+    CScriptVarLink *addChildNoDup(const std::string &childName, CScriptVar *child = NULL); ///< add a child overwriting any with the same name
+    void removeChild(const std::string &childName, CScriptVar *child, bool throwIfMissing = false);
     void removeLink(CScriptVarLink *link); ///< Remove a specific link (this is faster than finding via a child)
     void removeAllChildren();
     CScriptVar *getArrayIndex(int idx); ///< The the value at an array index
@@ -240,16 +243,16 @@ public:
     void setArray();
     bool equals(CScriptVar *v);
 
-    bool isInt() { return (flags&SCRIPTVAR_INTEGER)!=0; }
-    bool isDouble() { return (flags&SCRIPTVAR_DOUBLE)!=0; }
-    bool isString() { return (flags&SCRIPTVAR_STRING)!=0; }
-    bool isNumeric() { return (flags&SCRIPTVAR_NUMERICMASK)!=0; }
-    bool isFunction() { return (flags&SCRIPTVAR_FUNCTION)!=0; }
-    bool isObject() { return (flags&SCRIPTVAR_OBJECT)!=0; }
-    bool isArray() { return (flags&SCRIPTVAR_ARRAY)!=0; }
-    bool isNative() { return (flags&SCRIPTVAR_NATIVE)!=0; }
+    bool isInt() { return (flags&SCRIPTVAR_INTEGER) != 0; }
+    bool isDouble() { return (flags&SCRIPTVAR_DOUBLE) != 0; }
+    bool isString() { return (flags&SCRIPTVAR_STRING) != 0; }
+    bool isNumeric() { return (flags&SCRIPTVAR_NUMERICMASK) != 0; }
+    bool isFunction() { return (flags&SCRIPTVAR_FUNCTION) != 0; }
+    bool isObject() { return (flags&SCRIPTVAR_OBJECT) != 0; }
+    bool isArray() { return (flags&SCRIPTVAR_ARRAY) != 0; }
+    bool isNative() { return (flags&SCRIPTVAR_NATIVE) != 0; }
     bool isUndefined() { return (flags & SCRIPTVAR_VARTYPEMASK) == SCRIPTVAR_UNDEFINED; }
-    bool isNull() { return (flags & SCRIPTVAR_NULL)!=0; }
+    bool isNull() { return (flags & SCRIPTVAR_NULL) != 0; }
     bool isBasic() { return children.empty(); } ///< Is this *not* an array/object/etc
 
     CScriptVar *mathsOp(CScriptVar *b, int op); ///< do a maths op with another script variable
@@ -258,11 +261,11 @@ public:
 
     void trace(std::string indentStr = "", const std::string &name = ""); ///< Dump out the contents of this using trace
     std::string getFlagsAsString(); ///< For debugging - just dump a string version of the flags
-    void getJSON(std::ostringstream &destination, const std::string linePrefix=""); ///< Write out all the JS code needed to recreate this script variable to the stream (as JSON)
+    void getJSON(std::ostringstream &destination, const std::string linePrefix = ""); ///< Write out all the JS code needed to recreate this script variable to the stream (as JSON)
     void setCallback(JSCallback callback, void *userdata); ///< Set the callback for native functions
 
-	std::unordered_map<std::string, CScriptVarLink*> children;
-	std::vector<CScriptVarLink*> orderedChildren();	///< Returns a vector of the children of this variable ordered by most recently added last
+    std::unordered_map<std::string, CScriptVarLink*> children;
+    std::vector<CScriptVarLink*> orderedChildren();	///< Returns a vector of the children of this variable ordered by most recently added last
 
     /// For memory management/garbage collection
     CScriptVar *ref(); ///< Add reference to this variable
@@ -270,7 +273,7 @@ public:
     int getRefs(); ///< Get the number of references to this script variable
 protected:
     int refs; ///< The number of references held to this - used for garbage collection
-	int executions; ///< The number of times this function has been executed (if this is a function)
+    int executions; ///< The number of times this function has been executed (if this is a function)
 
     std::string data; ///< The contents of this variable if it is a string
     long intData; ///< The contents of this variable if it is an int
@@ -283,13 +286,14 @@ protected:
       * children. Should be used internally only - by copyValue and deepCopy */
     void copySimpleData(CScriptVar *val);
 
-	CScriptVarLink* firstChild; ///< used for ordered iteration through children (function defs, etc)
-	CScriptVarLink* lastChild; ///< only used to maintain script link linked list
+    CScriptVarLink* firstChild; ///< used for ordered iteration through children (function defs, etc)
+    CScriptVarLink* lastChild; ///< only used to maintain script link linked list
 
     friend class CTinyJS;
 };
 
-class CTinyJS {
+class CTinyJS
+{
 public:
     CTinyJS(int executions_before_compile = 30);
     ~CTinyJS();
@@ -333,7 +337,7 @@ public:
 
     CScriptVar *root;   /// root of symbol table
 private:
-	int executions_to_compile;
+    int executions_to_compile;
     CScriptLex *l;             /// current lexer
     std::vector<CScriptVar*> scopes; /// stack of scopes when parsing
 #ifdef TINYJS_CALL_STACK
@@ -365,20 +369,20 @@ private:
     /// Look up in any parent classes of the given object
     CScriptVarLink *findInParentClasses(CScriptVar *object, const std::string &name);
 
-	/* Used for new keyword and object/array definitions in JIT compiling */
-	CScriptVar* createObject(bool& execute, CScriptLex* lexer);
-	CScriptVar* createArray(bool& execute, CScriptLex* lexer);
-	CScriptVar* keywordNew(bool& execute, CScriptLex* lexer);
-	/* These are the functions actually registered with addNative to implement
-	   new, [], and {} in the JIT-compiled code. The second parameter is the instance of 
-	   CTinyJS, since these functions must be declared static to match the signature
-	   of JSCallback. */
-	static void createObjectNative(CScriptVar* root, void* impl);
-	static void createArrayNative(CScriptVar* root, void* impl);
-	static void keywordNewNative(CScriptVar* root, void* impl);
+    /* Used for new keyword and object/array definitions in JIT compiling */
+    CScriptVar* createObject(bool& execute, CScriptLex* lexer);
+    CScriptVar* createArray(bool& execute, CScriptLex* lexer);
+    CScriptVar* keywordNew(bool& execute, CScriptLex* lexer);
+    /* These are the functions actually registered with addNative to implement
+       new, [], and {} in the JIT-compiled code. The second parameter is the instance of
+       CTinyJS, since these functions must be declared static to match the signature
+       of JSCallback. */
+    static void createObjectNative(CScriptVar* root, void* impl);
+    static void createArrayNative(CScriptVar* root, void* impl);
+    static void keywordNewNative(CScriptVar* root, void* impl);
 
-	/* Compiles a function into native code. */
-	void compile(CScriptVarLink* function);
+    /* Compiles a function into native code. */
+    void compile(CScriptVarLink* function);
 };
 
 #endif
