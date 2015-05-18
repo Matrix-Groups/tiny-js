@@ -185,6 +185,7 @@ public:
   CScriptVar *var;
   bool owned;
 
+  CScriptVarLink(); // for use as an immediate (only used in jit code)
   CScriptVarLink(CScriptVar *var, const std::string &name = TINYJS_TEMP_NAME);
   CScriptVarLink(const CScriptVarLink &link); ///< Copy constructor
   ~CScriptVarLink(); 

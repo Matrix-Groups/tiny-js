@@ -12,8 +12,8 @@
 
 // these three macros are used to avoid memory leaking in JIT-ed code. 
 #define FUNCTION_VECTOR_NAME "__t_"
-#define NO_LEAK_BEGIN() (std::string("*") + FUNCTION_VECTOR_NAME + ".insert(" + FUNCTION_VECTOR_NAME + ".end(), ")
-#define NO_LEAK_END() (")")
+#define NO_LEAK_BEGIN() (std::string("(*") + FUNCTION_VECTOR_NAME + ".insert(" + FUNCTION_VECTOR_NAME + ".end(), ")
+#define NO_LEAK_END() ("))")
 // this is used as a placeholder to store things so that they can be pointerized
 // during emitting a function call
 #define FUNCTION_VALUE_PLACEHOLDER_NAME "__p_"
@@ -653,7 +653,7 @@ void CSyntaxIf::emit(std::ostream & out, const std::string indentation)
 {
 	out << indentation << "if(";
 	expr->emit(out);
-	out << "->getBool()) {\n";
+	out << "->var->getBool()) {\n";
 	node->emit(out, indentation + "    ");
 	out << indentation << "} ";
 	if(else_)
@@ -681,7 +681,7 @@ void CSyntaxWhile::emit(std::ostream & out, const std::string indentation)
 {
 	out << indentation << "while(";
 	expr->emit(out);
-	out << "->getBool()) {\n";
+	out << "->var->getBool()) {\n";
 	node->emit(out, indentation + "    ");
 	out << indentation << "}";
 }
@@ -716,7 +716,7 @@ void CSyntaxFor::emit(std::ostream & out, const std::string indentation)
 	if(cond)
 	{
 		cond->emit(out);
-		out << "->getBool()";
+		out << "->var->getBool()";
 	}
 	out << "; ";
 	if(update)
@@ -803,7 +803,7 @@ void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
 	out << "(CScriptVar* root, void* userData) {\n";
 	// to avoid memory leaks, we need a structure to hold any newly allocated CScriptVarLink*s.
 	// we need to mangle the name of any locals so as to avoid name collisions
-	// (however, if any variables in the function were named "__temps_", this would
+	// (however, if any variables in the function were named "__t_", this would
 	// generate bad code due to a redeclaration). 
 	// thus, we should endeavor to declare as little extra as possible.
 	out << indentation + "    " << "std::vector<CScriptVarLink*> " << FUNCTION_VECTOR_NAME << ";\n";
@@ -815,12 +815,18 @@ void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
 		// setup variable declarations/assignments
 		out << indentation + "    " << "CScriptVarLink* ";
 		arg->emit(out);
-		out << " = root->getParameter(\"";
+		out << " = new CScriptVarLink(root->getParameter(\"";
 		arg->emit(out);
-		out << "\");\n";
+		out << "\"));\n";
 	}
 	node->emit(out, indentation + "    ");
 	// cleanup
+	for(auto& arg : arguments)
+	{
+		out << indentation + "    " << "delete ";
+		arg->emit(out);
+		out << ";\n";
+	}
 	out << indentation + "    " << "for(CScriptVarLink* __to_del_: " << FUNCTION_VECTOR_NAME << ")\n";
 	out << indentation + "        " << "delete __to_del_;\n";
 	out << indentation << "}\n";
@@ -895,7 +901,7 @@ void CSyntaxTernaryOperator::emit(std::ostream & out, const std::string indentat
 	// op can only be '?'
 	out << indentation;
 	node->emit(out);
-	out << "->getBool() ? ";
+	out << "->var->getBool() ? ";
 	b1->emit(out);
 	out << " : ";
 	b2->emit(out);
@@ -1068,7 +1074,7 @@ void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation
 	out << indentation << "&(" << FUNCTION_VALUE_PLACEHOLDER_NAME << " = ((CTinyJS*)userData)->evaluateComplex(\"";
 	// we need to escape quotes
 	std::string str = origString;
-	int pos = 0;
+	size_t pos = 0;
 	while((pos = str.find_first_of('"', pos)) != std::string::npos)
 	{
 		str.insert(str.begin() + pos, '\\');

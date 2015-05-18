@@ -772,6 +772,18 @@ string CScriptLex::getPosition(int pos)
 
 // ----------------------------------------------------------------------------------- CSCRIPTVARLINK
 
+CScriptVarLink::CScriptVarLink()
+{
+#if DEBUG_MEMORY
+	mark_allocated(this);
+#endif 	   
+	this->nextSibling = 0;
+	this->prevSibling = 0;
+	this->var = 0;
+	this->owned = false;
+	this->name = "";
+}
+
 CScriptVarLink::CScriptVarLink(CScriptVar *var, const std::string &name)
 {
 #if DEBUG_MEMORY
@@ -809,7 +821,8 @@ CScriptVarLink* CScriptVarLink::replaceWith(CScriptVar *newVar)
 {
 	CScriptVar *oldVar = var;
 	var = newVar->ref();
-	oldVar->unref();
+	if(oldVar)
+		oldVar->unref();
 	return this;
 }
 
@@ -2087,7 +2100,7 @@ void CTinyJS::compile(CScriptVarLink* function)
 	stree->parse();
 	
 	ofstream outfile;
-	outfile.open("jit.c", ios::trunc);
+	outfile.open("jit.cpp", ios::trunc);
 	stree->compile(outfile);
 	outfile.close();
 }
