@@ -1,3 +1,7 @@
 *.exe
 *.o
+*.so
 .vs/
+Script
+run_profiler
+run_tests

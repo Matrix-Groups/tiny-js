@@ -798,37 +798,40 @@ CSyntaxFunction::~CSyntaxFunction()
 
 void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
 {
-    out << indentation << "void ";
-    getName()->emit(out);
+    out << indentation << "extern \"C\" {\n";
+    std::string realIndent = indentation + "    ";
+    out << realIndent << "void ";
+    getName()->emit(out, realIndent);
     out << "(CScriptVar* root, void* userData) {\n";
     // to avoid memory leaks, we need a structure to hold any newly allocated CScriptVarLink*s.
     // we need to mangle the name of any locals so as to avoid name collisions
     // (however, if any variables in the function were named "__t_", this would
     // generate bad code due to a redeclaration). 
     // thus, we should endeavor to declare as little extra as possible.
-    out << indentation + "    " << "std::vector<CScriptVarLink*> " << FUNCTION_VECTOR_NAME << ";\n";
+    out << realIndent + "    " << "std::vector<CScriptVarLink*> " << FUNCTION_VECTOR_NAME << ";\n";
     // we also need a value-type CScriptVarLink, because evaluateComplex() returns a 
     // non-pointer and we need to normalize it into a pointer.
-    out << indentation + "    " << "CScriptVarLink " << FUNCTION_VALUE_PLACEHOLDER_NAME << ";\n";
+    out << realIndent + "    " << "CScriptVarLink " << FUNCTION_VALUE_PLACEHOLDER_NAME << ";\n";
     for(auto& arg : arguments)
     {
         // setup variable declarations/assignments
-        out << indentation + "    " << "CScriptVarLink* ";
+        out << realIndent + "    " << "CScriptVarLink* ";
         arg->emit(out);
         out << " = new CScriptVarLink(root->getParameter(\"";
         arg->emit(out);
         out << "\"));\n";
     }
-    node->emit(out, indentation + "    ");
+    node->emit(out, realIndent + "    ");
     // cleanup
     for(auto& arg : arguments)
     {
-        out << indentation + "    " << "delete ";
+        out << realIndent + "    " << "delete ";
         arg->emit(out);
         out << ";\n";
     }
-    out << indentation + "    " << "for(CScriptVarLink* __to_del_: " << FUNCTION_VECTOR_NAME << ")\n";
-    out << indentation + "        " << "delete __to_del_;\n";
+    out << realIndent + "    " << "for(CScriptVarLink* __to_del_: " << FUNCTION_VECTOR_NAME << ")\n";
+    out << realIndent + "        " << "delete __to_del_;\n";
+    out << realIndent << "}\n";
     out << indentation << "}\n";
 }
 

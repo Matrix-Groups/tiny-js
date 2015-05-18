@@ -134,6 +134,10 @@
 #include <cstdlib>
 #include <stdio.h>
 #include <fstream>
+#ifdef _MSC_VER
+#else
+#include <dlfcn.h>
+#endif
 
 using namespace std;
 
@@ -814,7 +818,8 @@ CScriptVarLink::~CScriptVarLink()
 #if DEBUG_MEMORY
     mark_deallocated(this);
 #endif
-    var->unref();
+    if(var)
+        var->unref();
 }
 
 CScriptVarLink* CScriptVarLink::replaceWith(CScriptVar *newVar)
@@ -2103,6 +2108,28 @@ void CTinyJS::compile(CScriptVarLink* function)
     outfile.open("jit.cpp", ios::trunc);
     stree->compile(outfile);
     outfile.close();
+#ifdef _MSC_VER
+#else
+    // ship off the actual compilation to gcc for now
+    // yes, yes, it's a system call, blah blah blah
+    // it goes without saying that this only works if the executable
+    // has libtinyjs.so and TinyJS.h in its working directory and gcc
+    // on PATH.
+    system("gcc -g -Wall -D_DEBUG -std=c++11 -fPIC -include TinyJS.h -L./libtinyjs -shared -o jit.so jit.cpp");
+    // open the newly built library (this is why we needed -ldl)
+    void* handle = dlopen("./jit.so", RTLD_NOW);
+    if(!handle)
+    {
+        TRACE("%s\n", dlerror());
+        return;
+    }
+    JSCallback callback = (JSCallback)dlsym(handle, function->name.c_str());
+    function->var->setCallback(callback, this);
+    function->var->flags |= SCRIPTVAR_NATIVE;
+    // technically, we should keep track of the handle in the function variable
+    // and close it when the variable is deleted, but this is a temporary thing
+    // so I'm not too concerned right now.
+#endif
 }
 
 CScriptVarLink *CTinyJS::unary(bool &execute)
