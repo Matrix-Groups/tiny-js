@@ -41,6 +41,7 @@
 #include <stdlib.h>
 #include <iostream>	 
 #include <sstream>
+#include <cstring>
 
 #ifdef _MSC_VER
 #include <Psapi.h>
@@ -58,7 +59,7 @@ void js_print(CScriptVar *v, void *userdata)
     printf("> %s\n", v->getParameter("text")->getString().c_str());
 }
 
-int usage(char* name)
+int usage(const char* name)
 {
 	printf("Usage: ./%s [--jit n] profile.js [NAME=VALUE...]\n", name);
 	printf("       --jit n: Set the JIT compilation to occur after n executions. Default is 1.\n");
@@ -81,14 +82,14 @@ bool getmemusage(int& usage)
 	else
 		usage = pmc.PeakWorkingSetSize / 1024;
 #else
-	struct rusage usage;
-	if(getrusage(RUSAGE_SELF, &usage))
+	struct rusage memusage;
+	if(getrusage(RUSAGE_SELF, &memusage))
 	{
 		TRACE("Failed in getrusage(), memory profiling disabled.\n");
 		return false;
 	}
 	else
-		usage = rusage.ru_maxrss;
+		usage = memusage.ru_maxrss;
 #endif
 	return true;
 }
