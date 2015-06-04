@@ -1883,7 +1883,7 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
         l->match(LEX_R_UNDEFINED);
         return new CScriptVarLink(new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_UNDEFINED));
     }
-    if(l->tk == LEX_ID)
+    if(l->tk == LEX_ID || l->tk == LEX_R_RESERVED)
     {
         CScriptVarLink *a = execute ? findInScopes(l->tkStr) : new CScriptVarLink(new CScriptVar());
         //printf("0x%08X for %s at %s\n", (unsigned int)a, l->tkStr.c_str(), l->getPosition().c_str());
@@ -1893,18 +1893,24 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
         if(execute && !a)
         {
             /* Variable doesn't exist! JavaScript says we should create it
-             * (we won't add it here. This is done in the assignment operator)*/
+             * (we won't add it here. This is done in the assignment operator) */
             a = new CScriptVarLink(new CScriptVar(), l->tkStr);
         }
-        l->match(LEX_ID);
         while(l->tk == '(' || l->tk == '.' || l->tk == '[')
         {
             if(l->tk == '(')
-            { // ------------------------------------- Function Call
+            { 
+				// ------------------------------------- Function Call
+				if(l->tk == LEX_ID)
+					l->match(LEX_ID);
+				else
+					l->match(LEX_R_RESERVED);
                 a = functionCall(execute, a, parent);
             }
             else if(l->tk == '.')
-            { // ------------------------------------- Record Access
+            {
+				// ------------------------------------- Record Access
+				l->match(LEX_ID);
                 l->match('.');
                 if(execute)
                 {
@@ -1920,7 +1926,9 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
                 l->match(LEX_ID);
             }
             else if(l->tk == '[')
-            { // ------------------------------------- Array Access
+            { 
+				// ------------------------------------- Array Access
+				l->match(LEX_ID);
                 l->match('[');
                 CScriptVarLink *index = base(execute);
                 l->match(']');
@@ -2636,6 +2644,17 @@ void CTinyJS::statement(bool &execute)
         }
         CLEAN(funcVar);
     }
+	else if(l->tk == LEX_R_RESERVED)
+	{
+		// need to be able to call the reserved functions because they're used
+		// in JIT-code when it calls evaluateComplex(). This could be removed 
+		// if the JIT-code is refitted to set up the function call itself.
+
+		// if the reserved word is used incorrectly, this will attempt to match
+		// LEX_ID to LEX_R_RESERVED and error out
+		CLEAN(base(execute));
+		l->match(';');
+	}
     else l->match(LEX_EOF);
 }
 
