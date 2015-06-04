@@ -513,9 +513,9 @@ void CScriptLex::getNextToken()
         else if(tkStr == "null") tk = LEX_R_NULL;
         else if(tkStr == "undefined") tk = LEX_R_UNDEFINED;
         else if(tkStr == "new") tk = LEX_R_NEW;
-        else if(tkStr == "__obj_" ||
-            tkStr == "__new_" ||
-            tkStr == "__array_") tk = LEX_R_RESERVED;
+        else if(tkStr == TINYJS_OBJECT_FUNCTION_NAME ||
+            tkStr == TINYJS_NEW_FUNCTION_NAME ||
+            tkStr == TINYJS_ARRAY_FUNCTION_NAME) tk = LEX_R_RESERVED;
     }
     else if(isNumeric(currCh))
     { // Numbers
@@ -1548,9 +1548,9 @@ CTinyJS::CTinyJS(int executions_before_compile)
     root->addChild("String", stringClass);
     root->addChild("Array", arrayClass);
     root->addChild("Object", objectClass);
-    addNative("function __array_(argString)", &createArrayNative, this);
-    addNative("function __object_(argString)", &createObjectNative, this);
-    addNative("function __new_(argString)", &keywordNewNative, this);
+    addNative("function " + string(TINYJS_ARRAY_FUNCTION_NAME) + "(argString)", &createArrayNative, this);
+    addNative("function " + string(TINYJS_OBJECT_FUNCTION_NAME) + "(argString)", &createObjectNative, this);
+    addNative("function " + string(TINYJS_NEW_FUNCTION_NAME) + "(argString)", &keywordNewNative, this);
 }
 
 CTinyJS::~CTinyJS()
@@ -1896,24 +1896,32 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
              * (we won't add it here. This is done in the assignment operator) */
             a = new CScriptVarLink(new CScriptVar(), l->tkStr);
         }
-		bool matched = false;
+		bool reserved = false;
+		int tkst = l->tokenStart;
+		if(l->tk == LEX_R_RESERVED)
+		{
+			reserved = true;
+			l->match(LEX_R_RESERVED);
+		}
+		else
+			l->match(LEX_ID);
         while(l->tk == '(' || l->tk == '.' || l->tk == '[')
         {
             if(l->tk == '(')
             { 
 				// ------------------------------------- Function Call
-				matched = true;
-				if(l->tk == LEX_ID)
-					l->match(LEX_ID);
-				else
-					l->match(LEX_R_RESERVED);
                 a = functionCall(execute, a, parent);
             }
             else if(l->tk == '.')
             {
 				// ------------------------------------- Record Access
-				matched = true;
-				l->match(LEX_ID);
+				if(reserved)
+				{
+					ostringstream errorString;
+					errorString << "Got " << l->getTokenStr(LEX_R_RESERVED) << " expected " << l->getTokenStr(LEX_ID)
+						<< " at " << tkst;
+					throw new CScriptException(errorString.str());
+				}
                 l->match('.');
                 if(execute)
                 {
@@ -1926,13 +1934,18 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
                     parent = a->var;
                     a = child;
                 }
-				matched = false;
+				l->match(LEX_ID);
             }
             else if(l->tk == '[')
             { 
 				// ------------------------------------- Array Access
-				matched = true;
-				l->match(LEX_ID);
+				if(reserved)
+				{
+					ostringstream errorString;
+					errorString << "Got " << l->getTokenStr(LEX_R_RESERVED) << " expected " << l->getTokenStr(LEX_ID)
+						<< " at " << tkst;
+					throw new CScriptException(errorString.str());
+				}
                 l->match('[');
                 CScriptVarLink *index = base(execute);
                 l->match(']');
@@ -1946,8 +1959,6 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
             }
             else ASSERT(0);
         }
-		if(!matched)
-			l->match(LEX_ID);
         return a;
     }
     if(l->tk == LEX_INT || l->tk == LEX_FLOAT)

@@ -133,6 +133,9 @@ enum SCRIPTVAR_FLAGS
 #define TINYJS_PROTOTYPE_CLASS "prototype"
 #define TINYJS_TEMP_NAME ""
 #define TINYJS_BLANK_DATA ""
+#define TINYJS_NEW_FUNCTION_NAME "__new_"
+#define TINYJS_ARRAY_FUNCTION_NAME "__array_"
+#define TINYJS_OBJECT_FUNCTION_NAME "__object_"
 
 /// convert the given string into a quoted string suitable for javascript
 std::string getJSString(const std::string &str);

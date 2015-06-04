@@ -164,9 +164,9 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
         }
         arg += "}";
         lexer->match('}');
-        // "__obj_()" is a special native function that constructs an object from a string
-        return new CSyntaxFunctionCall(new CSyntaxID("__obj_"), std::vector<CSyntaxExpression*>(1,
-            new CSyntaxFactor(arg.c_str())), "__obj_(\"" + arg + "\")");
+        // "__object_()" is a special native function that constructs an object from a string
+        return new CSyntaxFunctionCall(new CSyntaxID(TINYJS_OBJECT_FUNCTION_NAME), std::vector<CSyntaxExpression*>(1,
+            new CSyntaxFactor(arg.c_str())), TINYJS_OBJECT_FUNCTION_NAME + ("(\"" + arg + "\")"));
     }
     if(lexer->tk == '[')
     {
@@ -180,8 +180,8 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
         }
         lexer->match(']');
         arg += ']';
-        return new CSyntaxFunctionCall(new CSyntaxID("__array_"), std::vector<CSyntaxExpression*>(1,
-            new CSyntaxFactor(arg.c_str())), "__array_(\"" + arg + "\")");
+        return new CSyntaxFunctionCall(new CSyntaxID(TINYJS_ARRAY_FUNCTION_NAME), std::vector<CSyntaxExpression*>(1,
+            new CSyntaxFactor(arg.c_str())), TINYJS_ARRAY_FUNCTION_NAME + ("(\"" + arg + "\")"));
     }
     if(lexer->tk == LEX_R_FUNCTION)
     {
@@ -205,8 +205,8 @@ CSyntaxExpression* CScriptSyntaxTree::factor()
         }
         lexer->match(')');
         arg += ')';
-        return new CSyntaxFunctionCall(new CSyntaxID("__new_"), std::vector<CSyntaxExpression*>(1,
-            new CSyntaxFactor(arg.c_str())), "__new_" + arg);
+        return new CSyntaxFunctionCall(new CSyntaxID(TINYJS_NEW_FUNCTION_NAME), std::vector<CSyntaxExpression*>(1,
+            new CSyntaxFactor(arg.c_str())), TINYJS_NEW_FUNCTION_NAME + arg);
     }
     // Nothing we can do here... just hope it's the end...
     lexer->match(LEX_EOF);
