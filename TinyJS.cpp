@@ -1896,11 +1896,13 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
              * (we won't add it here. This is done in the assignment operator) */
             a = new CScriptVarLink(new CScriptVar(), l->tkStr);
         }
+		bool matched = false;
         while(l->tk == '(' || l->tk == '.' || l->tk == '[')
         {
             if(l->tk == '(')
             { 
 				// ------------------------------------- Function Call
+				matched = true;
 				if(l->tk == LEX_ID)
 					l->match(LEX_ID);
 				else
@@ -1910,6 +1912,7 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
             else if(l->tk == '.')
             {
 				// ------------------------------------- Record Access
+				matched = true;
 				l->match(LEX_ID);
                 l->match('.');
                 if(execute)
@@ -1928,6 +1931,7 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
             else if(l->tk == '[')
             { 
 				// ------------------------------------- Array Access
+				matched = true;
 				l->match(LEX_ID);
                 l->match('[');
                 CScriptVarLink *index = base(execute);
@@ -1942,6 +1946,8 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
             }
             else ASSERT(0);
         }
+		if(!matched)
+			l->match(LEX_ID);
         return a;
     }
     if(l->tk == LEX_INT || l->tk == LEX_FLOAT)
