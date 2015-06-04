@@ -187,8 +187,8 @@ int main(int argc, char **argv)
 		// setup memory profiling
 		bool memprof = false;
 		int prestart_wss;
-		int memoryusage;
-		int precompile_usage;
+		int postmemoryusage;
+		int prememoryusage;
 
 		// start actual profiling
 		double tstart, tstop;
@@ -199,7 +199,12 @@ int main(int argc, char **argv)
 		for(i = 0; i < iterations; i++)
 		{
 			if(i == jit_at && memprof)
-				memprof = getmemusage(precompile_usage);
+			{
+				int precompile_usage;
+				prememoryusage = (memprof = getmemusage(precompile_usage)) ? precompile_usage - prestart_wss : 0;
+				if(memprof && !prememoryusage)
+					prememoryusage = prestart_wss;
+			}
 
 			tstart = (double)clock() / CLOCKS_PER_SEC;
 			js->evaluate(profstring);
@@ -234,9 +239,9 @@ int main(int argc, char **argv)
 				postmin = comp;
 			postavgincl += comp;
 		}
-		// there was only one execution after compilation
+		// there was only one execution, the compilation one
 		if(postmax == DBL_MAX)
-			postmax = postmin;
+			postmax = compileexec;
 		avg += postavgincl;
 		postavgexcl = postavgincl - compileexec;
 		postavgexcl /= iterations - jit_at;
@@ -246,7 +251,9 @@ int main(int argc, char **argv)
 		if(memprof)
 		{
 			int finish_wss;
-			memoryusage = (memprof = getmemusage(finish_wss)) ? finish_wss - prestart_wss : 0;
+			postmemoryusage = (memprof = getmemusage(finish_wss)) ? finish_wss - prestart_wss : 0;
+			if(memprof && !postmemoryusage)
+				postmemoryusage = prestart_wss;
 		}
 
         cout << "Profiled function " << fnname << " a total of " + iter.var->getString() + " time(s)." << endl;
@@ -257,8 +264,8 @@ int main(int argc, char **argv)
 		cout << "Total average with " << iterations << " iterations: " << avg << "s" << endl;
 		if(memprof)
 		{
-			cout << "Max resident working set pre-JIT (in kb): " << (precompile_usage - prestart_wss) << endl;
-			cout << "Max resident working set post-JIT (in kb): " << memoryusage << endl;
+			cout << "Max resident working set pre-JIT: " << prememoryusage << ((prememoryusage == prestart_wss) ? "kb (shadowed by startup)" : "kb") << endl;
+			cout << "Max resident working set post-JIT: " << postmemoryusage << ((postmemoryusage == prestart_wss) ? "kb (shadowed by startup)" : "kb") << endl;
 		}
 		else
 			cout << "(Memory profiling disabled due to error)" << endl;
