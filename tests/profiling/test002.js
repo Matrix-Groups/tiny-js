@@ -14,14 +14,7 @@ function init() {
 }
 
 function get_iterations() { return NUM_ITERATIONS; }
+function get_arg_list() { return "MAX_FACT"; }
+function get_function_name() { return "factorial"; }
 
 function setup() { }
-
-function run() {
-	print("Running factorial - " + NUM_ITERATIONS + " iterations; computing factorial(" + MAX_FACT + ") each time.");
-
-	for(var i = 0; i < NUM_ITERATIONS; i++)
-		factorial(MAX_FACT);
-
-	return "factorial()";
-}

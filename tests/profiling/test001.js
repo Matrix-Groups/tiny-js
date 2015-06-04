@@ -16,14 +16,7 @@ function init() {
 }
 
 function get_iterations() { return NUM_ITERATIONS; }
+function get_arg_list() { return "MAX_FIB"; }
+function get_function_name() { return "fib"; }
 
 function setup() { }
-
-function run() {
-	print("Running fibonacci numbers - " + NUM_ITERATIONS + " iterations; computing fib(" + MAX_FIB + ") each time.");
-
-	for(var i = 0; i < NUM_ITERATIONS; i++)
-		fib(MAX_FIB);
-
-	return "fib()";
-}

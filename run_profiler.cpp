@@ -34,11 +34,20 @@
 #include "TinyJS_Functions.h"
 #include "TinyJS_MathFunctions.h"
 #include <time.h>	 
+#include <float.h>
 #include <sys/stat.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>	 
+#include <sstream>
+
+#ifdef _MSC_VER
+#include <Psapi.h>
+#else
+#include <sys/time.h>
+#include <sys/resources.h>
+#endif
 
 using std::cout;
 using std::endl;
@@ -49,30 +58,78 @@ void js_print(CScriptVar *v, void *userdata)
     printf("> %s\n", v->getParameter("text")->getString().c_str());
 }
 
+int usage(char* name)
+{
+	printf("Usage: ./%s [--jit n] profile.js [NAME=VALUE...]\n", name);
+	printf("       --jit n: Set the JIT compilation to occur after n executions. Default is 1.\n");
+	printf("                Setting n=0 will disable compilation.");
+	printf("                (This argument must appear here or nowhere.)");
+	printf("       profile.js: Name of file to run.\n");
+	printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file");
+	return 1;
+}
+
+bool getmemusage(int& usage)
+{
+#ifdef _MSC_VER
+	PROCESS_MEMORY_COUNTERS pmc;
+	if(!GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
+	{
+		TRACE("Failed in GetProcessMemoryInfo(), memory profiling disabled.\n");
+		return false;
+	}
+	else
+		usage = pmc.PeakWorkingSetSize / 1024;
+#else
+	struct rusage usage;
+	if(getrusage(RUSAGE_SELF, &usage))
+	{
+		TRACE("Failed in getrusage(), memory profiling disabled.\n");
+		return false;
+	}
+	else
+		usage = rusage.ru_maxrss;
+#endif
+	return true;
+}
+
 int main(int argc, char **argv)
 {
-    // we want to test profiling, so force functions to always compile after the first execution
-    CTinyJS *js = new CTinyJS(1);
-    /* add the functions from TinyJS_Functions.cpp */
-    registerFunctions(js);
-    registerMathFunctions(js);
-    /* Add a native function */
-    js->addNative("function print(text)", &js_print, 0);
-    /* Execute out bit of code - we could call 'evaluate' here if
-       we wanted something returned */
+	if(argc < 2)
+		return usage(argc ? argv[0] : "run_profiler");
 
-    if(argc < 2)
-    {
-        if(argc > 0)
-            printf("Usage: ./%s profile.js [NAME=VALUE...]\n", argv[0]);
-        else
-            printf("Usage: ./run_profiler profile.js [NAME=VALUE...]\n");
-        printf("       profile.js: Name of file to run.\n");
-        printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file");
-        return 1;
-    }
+	char* fname;
+	int jit_at = 1;
+	int i = 2;
+	if(!strcmp(argv[1], "--jit"))
+	{
+		if(argc < 4)
+			return usage(argv[0]);
 
-    const char* filename = argv[1];
+		std::stringstream st(argv[2]);
+		st >> jit_at;
+		if(!st)
+		{
+			printf("Argument to --jit was not an int.");
+			return usage(argv[0]);
+		}
+		fname = argv[3];
+		i = 4;
+	}
+	else
+		fname = argv[1];
+
+	/* Create the interpreter with the specified number of executions */
+	CTinyJS *js = new CTinyJS(jit_at);
+	/* add the functions from TinyJS_Functions.cpp */
+	registerFunctions(js);
+	registerMathFunctions(js);
+	/* Add a native function (this particular one isn't used in our scripts anymore, though) */
+	js->addNative("function print(text)", &js_print, 0);
+	/* Execute out bit of code - we could call 'evaluate' here if
+	we wanted something returned */
+
+    const char* filename = fname;
     struct stat results;
     if(!stat(filename, &results) == 0)
     {
@@ -93,44 +150,119 @@ int main(int argc, char **argv)
     buffer[size] = 0;
     fclose(file);
 
-    try
-    {
-        // read in definitions from the buffer
-        js->execute(buffer);
+	try
+	{
+		// read in definitions from the buffer
+		js->execute(buffer);
 
-        // initialize default script parameters
-        js->execute("init();");
+		// initialize default script parameters
+		js->execute("init();");
 
-        // set parameters from arguments
-        for(int i = 2; i < argc; i++)
-        {
-            int idx = 0;
-            while(argv[i][idx] != '=' && argv[i][idx] != '\0') idx++;
-            if(argv[i][idx] == '\0') continue;
+		// set parameters from arguments
+		// i is already set when arguments are parsed above
+		for(; i < argc; i++)
+		{
+			int idx = 0;
+			while(argv[i][idx] != '=' && argv[i][idx] != '\0') idx++;
+			if(argv[i][idx] == '\0') continue;
 
-            argv[i][idx++] = '\0';
-            // really, you might be fine just prepending "var " and appending ";" but
-            // might as well be safe
-            js->execute("var " + string(argv[i]) + "= (" + &(argv[i][idx]) + ");");
-        }
+			argv[i][idx++] = '\0';
+			// really, you might be fine just prepending "var " and appending ";" but
+			// might as well be safe
+			js->execute("var " + string(argv[i]) + "= (" + &(argv[i][idx]) + ");");
+		}
 
-        // run algorithm setup
-        js->execute("setup();");
+		// get iterations
+		CScriptVarLink iter = js->evaluateComplex("get_iterations();");
+		int iterations = iter.var->getInt();
 
-        // start actual profiling
-        double tstart, tstop, ttime;
+		// get function
+		string fnname = js->evaluate("get_function_name();");
+		string profstring = fnname + "(" + js->evaluate("get_arg_list();") + ");";
 
-        tstart = (double)clock() / CLOCKS_PER_SEC;
-        string functionName = js->evaluate("run();");
-        tstop = (double)clock() / CLOCKS_PER_SEC;
-        ttime = tstop - tstart;
+		// run algorithm setup
+		js->execute("setup();");
+		
+		// setup memory profiling
+		bool memprof = false;
+		int prestart_wss;
+		int memoryusage;
+		int precompile_usage;
 
-        // get iterations
-        string iterations = js->evaluate("get_iterations();");
+		// start actual profiling
+		double tstart, tstop;
+		double* times = new double[iterations];
+		printf("Beginning profiling, please be patient!\n");
 
-        cout << "Profiled function " + functionName + "." << endl;
-        cout << "Ran " + functionName + " a total of " + iterations + " time(s)." << endl;
-        cout << "Total time elapsed: " << ttime << ". Time per execution: " << ttime / atoi(iterations.c_str()) << endl;
+		memprof = getmemusage(prestart_wss);
+		for(i = 0; i < iterations; i++)
+		{
+			if(i == jit_at && memprof)
+				memprof = getmemusage(precompile_usage);
+
+			tstart = (double)clock() / CLOCKS_PER_SEC;
+			js->evaluate(profstring);
+			tstop = (double)clock() / CLOCKS_PER_SEC;
+			times[i] = tstop - tstart;
+		}
+
+		// calculate max/min for precompile/postcompile, avg for pre/post
+		double premax = 0, premin = DBL_MAX, preavg = 0;
+		double postmax = 0, postmin = DBL_MAX, postavgincl = 0, postavgexcl = 0;
+		double compileexec = 0;
+		double avg = 0;
+		for(i = 0; i < jit_at; i++)
+		{
+			double comp = times[i];
+			if(premax < comp)
+				premax = comp;
+			if(premin > comp)
+				premin = comp;
+			preavg += comp;
+		}
+		avg += preavg;
+		preavg /= jit_at;
+		for(; i < iterations; i++)
+		{
+			double comp = times[i];
+			if(i == jit_at)
+				compileexec = comp;
+			if(postmax < comp && i != jit_at)
+				postmax = comp;
+			if(postmin > comp)
+				postmin = comp;
+			postavgincl += comp;
+		}
+		// there was only one execution after compilation
+		if(postmax == DBL_MAX)
+			postmax = postmin;
+		avg += postavgincl;
+		postavgexcl = postavgincl - compileexec;
+		postavgexcl /= iterations - jit_at;
+		postavgincl /= iterations - jit_at;
+		avg /= iterations;
+
+		if(memprof)
+		{
+			int finish_wss;
+			memoryusage = (memprof = getmemusage(finish_wss)) ? finish_wss - prestart_wss : 0;
+		}
+
+        cout << "Profiled function " << fnname << " a total of " + iter.var->getString() + " time(s)." << endl;
+		cout << "Pre-compile min, max, average: " << premin << "s, " << premax << "s, " << preavg << "s" << endl;
+		cout << "Execution that triggered compilation took: " << compileexec << "s" << endl;
+		cout << "Post-compile min, max (excl. compile execution), average (incl. compile execution), average (excl. compile execution): " << endl;
+		cout << "\t" << postmin << "s, " << postmax << "s, " << postavgincl << "s, " << postavgexcl << "s" << endl;
+		cout << "Total average with " << iterations << " iterations: " << avg << "s" << endl;
+		if(memprof)
+		{
+			cout << "Max resident working set pre-JIT (in kb): " << (precompile_usage - prestart_wss) << endl;
+			cout << "Max resident working set post-JIT (in kb): " << memoryusage << endl;
+		}
+		else
+			cout << "(Memory profiling disabled due to error)" << endl;
+
+		delete[] times;
     }
     catch(CScriptException *e)
     {

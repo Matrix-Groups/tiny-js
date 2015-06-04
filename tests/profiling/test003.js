@@ -23,19 +23,13 @@ function create() {
 function init() {
 	NUM_ITERATIONS = 30;
 	NUM_ELEMENTS = 500;
+	FUNCTION_TO_PROFILE = "sort";
 }
 
 function get_iterations() { return NUM_ITERATIONS; }
+function get_arg_list() { return "ARRAY"; }
+function get_function_name() { return "sort"; }
 
 function setup() {
 	ARRAY = create();
-}
-
-function run() {
-	print("Running bubble sort - " + NUM_ITERATIONS + " iterations; " + NUM_ELEMENTS + "-element arrays");
-
-	for(var i = 0; i < NUM_ITERATIONS; i++)
-		sort(ARRAY);
-
-	return "sort()";
 }

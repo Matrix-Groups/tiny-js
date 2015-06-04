@@ -2132,7 +2132,7 @@ void CTinyJS::compile(CScriptVarLink* function)
     // ship off the actual compilation to cl.exe
     // this line is a hell of a doozy. it's made longer by the fact that
     // the development environment has to be activated with this bat script.
-    // Note that the version hard-coded here uses a D drive and VS2015; tweak to fit
+    // Note that the version hard-coded here uses a D drive and VS Community 2015 RC; tweak to fit
     // your build environment. 
     // Also, without the redirection at the end, two lines of output will be displayed
     // by cl during compile and there appears to be no way to make it compile quietly.
@@ -2140,7 +2140,7 @@ void CTinyJS::compile(CScriptVarLink* function)
     // it doesn't help at all.
     // Once again, it goes without saying that TinyJS.h must be in the same (working) directory
     // as the executable, and Debug\tiny-js.lib must also exist. 
-    system("%comspec% /c \"\"d:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x86 && cl.exe /nologo /D_USRDLL /D_WINDLL /EHsc /Zi /nologo /FI TinyJS.h jit.cpp Debug\\tiny-js.lib /MDd /LDd /link /DLL /OUT:jit.dll /EXPORT:\"fib\"\" > nul");
+    system((std::string("%comspec% /c \"\"d:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x86 && cl.exe /nologo /D_USRDLL /D_WINDLL /EHsc /Zi /FI TinyJS.h jit.cpp Debug\\tiny-js.lib /MDd /LDd /link /DLL /OUT:jit.dll /EXPORT:\"") + function->name + "\"\" > nul").c_str());
 #else
     // ship off the actual compilation to gcc for now
     // it goes without saying that this only works if the executable
@@ -2156,6 +2156,12 @@ void CTinyJS::compile(CScriptVarLink* function)
         return;
     }
     JSCallback callback = (JSCallback)GETSYMBOL(handle, function->name.c_str());
+
+	if(!callback)
+	{
+		TRACE("Unable to get symbol from DLL. It's possible compilation of the JIT-code failed.\n");
+		return;
+	}
 
     function->var->setCallback(callback, this);
     function->var->flags |= SCRIPTVAR_NATIVE;

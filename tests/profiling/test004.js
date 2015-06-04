@@ -1,6 +1,6 @@
 // naive smoothing
 
-function smooth(image) {
+function smooth(IMAGE) {
 	var output = [];
 	var image_length = image.length;
 	for(var i = 0; i < image_length; i++) {
@@ -47,16 +47,9 @@ function create() {
 }
 
 function get_iterations() { return NUM_ITERATIONS; }
+function get_arg_list() { return "IMAGE"; }
+function get_function_name() { return "smooth"; }
 
 function setup() {
-	IMAGE = create();
-}
-
-function run() {
-	print("Running naive smooth - " + NUM_ITERATIONS + " iterations; " + IMAGE_WIDTH + "x" + IMAGE_HEIGHT + " pixel images");
-
-	for(var i = 0; i < NUM_ITERATIONS; i++)
-		smooth(IMAGE);
-
-	return "smooth()";
+    IMAGE = create();
 }
