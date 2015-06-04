@@ -1076,7 +1076,7 @@ void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation
 
     // CSyntaxFunction::emit() doesn't set up a local CTinyJS variable because it
     // is only used here and we want to avoid accidental redeclarations of variables.
-    out << indentation << "&(" << FUNCTION_VALUE_PLACEHOLDER_NAME << " = ((CTinyJS*)userData)->evaluateComplex(\"";
+    out << indentation << "(&(" << FUNCTION_VALUE_PLACEHOLDER_NAME << " = ((CTinyJS*)userData)->evaluateComplex(\"";
     // we need to escape quotes
     std::string str = origString;
     size_t pos = 0;
@@ -1085,7 +1085,7 @@ void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation
         str.insert(str.begin() + pos, '\\');
         pos += 2; // make sure to skip past both the \ and the " to avoid infinite loops
     }
-    out << str << "\"))";
+    out << str << "\")))";
 }
 
 CSyntaxDefinition::CSyntaxDefinition(CSyntaxExpression * lvalue, CSyntaxExpression * rvalue)

@@ -1,6 +1,6 @@
 // naive smoothing
 
-function smooth(IMAGE) {
+function smooth(image) {
 	var output = [];
 	var image_length = image.length;
 	for(var i = 0; i < image_length; i++) {

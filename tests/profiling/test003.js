@@ -10,7 +10,7 @@ function sort(array) {
 				array[i] = temp;
 			}
 		}
-	}	
+	}
 }
 
 function create() {
