@@ -1926,7 +1926,7 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
                     parent = a->var;
                     a = child;
                 }
-                l->match(LEX_ID);
+				matched = false;
             }
             else if(l->tk == '[')
             { 
