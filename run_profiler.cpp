@@ -67,6 +67,17 @@ int usage(const char* name)
 	printf("                (This argument must appear here or nowhere.)");
 	printf("       profile.js: Name of file to run.\n");
 	printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file");
+	printf("\n");
+	printf("       Utility for profiling the JIT-compiling function of the tiny-js\n");
+	printf("       library. Profiles times per execution pre-JIT, post-JIT, and time to\n");
+	printf("       compile. Also profiles memory pressure in the form of max resident set\n"); 
+	printf("       for pre-compile and post-compile executions; this profiling includes\n");
+	printf("       attempts to screen out startup memory costs so that displayed values are\n");
+	printf("       exclusively representative of memory pressure due to JITted code. However,\n");
+	printf("       on some systems, a large chunk of memory is allocated during startup and\n");
+	printf("       then freed, causing the resident set to be artifically inflated and shadow\n");
+	printf("       the memory used by the actual program. These cases are detected and noted by\n");
+	printf("       the profiler.\n");
 	return 1;
 }
 
