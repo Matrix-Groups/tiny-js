@@ -2004,6 +2004,8 @@ CScriptVarLink *CTinyJS::factor(bool &execute)
 
 CScriptVar* CTinyJS::createObject(bool& execute, CScriptLex* lexer)
 {
+	CScriptLex* oldLex = l;
+	l = lexer;
     CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
     /* JSON-style object definition */
     lexer->match('{');
@@ -2025,6 +2027,7 @@ CScriptVar* CTinyJS::createObject(bool& execute, CScriptLex* lexer)
     }
 
     lexer->match('}');
+	l = oldLex;
     return contents;
 }
 
@@ -2038,6 +2041,8 @@ void CTinyJS::createObjectNative(CScriptVar* root, void* userData)
 
 CScriptVar* CTinyJS::createArray(bool& execute, CScriptLex* lexer)
 {
+	CScriptLex* oldLex = l;
+	l = lexer;
     CScriptVar *contents = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_ARRAY);
     /* JSON-style array */
     lexer->match('[');
@@ -2058,6 +2063,7 @@ CScriptVar* CTinyJS::createArray(bool& execute, CScriptLex* lexer)
         idx++;
     }
     lexer->match(']');
+	l = oldLex;
     return contents;
 }
 
@@ -2073,20 +2079,22 @@ void CTinyJS::createArrayNative(CScriptVar* root, void* userData)
 // adding it to a CScriptVarLink
 CScriptVar* CTinyJS::keywordNew(bool& execute, CScriptLex* lexer)
 {
+	CScriptLex* oldLex = l;
+	l = lexer;
     CScriptVar *obj = new CScriptVar(TINYJS_BLANK_DATA, SCRIPTVAR_OBJECT);
     // we need to keep a link to our object to prevent it from getting
     // cleaned during the function parsing.
     CScriptVarLink* objLink = new CScriptVarLink(obj);
     if(execute)
     {
-        const string &className = l->tkStr;
+        const string &className = lexer->tkStr;
         CScriptVarLink *objClassOrFunc = findInScopes(className);
         if(!objClassOrFunc)
         {
             TRACE("%s is not a valid class name", className.c_str());
             return new CScriptVar();
         }
-        l->match(LEX_ID);
+        lexer->match(LEX_ID);
         if(objClassOrFunc->var->isFunction())
         {
             CLEAN(functionCall(execute, objClassOrFunc, obj));
@@ -2103,11 +2111,11 @@ CScriptVar* CTinyJS::keywordNew(bool& execute, CScriptLex* lexer)
     }
     else
     {
-        l->match(LEX_ID);
-        if(l->tk == '(')
+        lexer->match(LEX_ID);
+        if(lexer->tk == '(')
         {
-            l->match('(');
-            l->match(')');
+            lexer->match('(');
+            lexer->match(')');
         }
     }
     // if the refs of our variable ever drop to zero,
@@ -2116,6 +2124,7 @@ CScriptVar* CTinyJS::keywordNew(bool& execute, CScriptLex* lexer)
     // in the calling code.
     obj->ref();
     CLEAN(objLink);
+	l = oldLex;
     return obj;
 }
 
