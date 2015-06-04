@@ -61,10 +61,10 @@ void js_print(CScriptVar *v, void *userdata)
 
 int usage(const char* name)
 {
-	printf("Usage: ./%s [--jit n] profile.js [NAME=VALUE...]\n", name);
+	printf("Usage: %s [--jit n] profile.js [NAME=VALUE...]\n", name);
 	printf("       --jit n: Set the JIT compilation to occur after n executions. Default is 1.\n");
-	printf("                Setting n=0 will disable compilation.");
-	printf("                (This argument must appear here or nowhere.)");
+	printf("                Setting n=0 will disable compilation.\n");
+	printf("                (This argument must appear here or nowhere.)\n");
 	printf("       profile.js: Name of file to run.\n");
 	printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file\n");
 	printf("\n");
