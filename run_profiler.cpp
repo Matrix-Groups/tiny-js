@@ -46,7 +46,7 @@
 #include <Psapi.h>
 #else
 #include <sys/time.h>
-#include <sys/resources.h>
+#include <sys/resource.h>
 #endif
 
 using std::cout;
