@@ -212,11 +212,7 @@ int main(int argc, char **argv)
 			if(i == jit_at && memprof)
 			{
 				int precompile_usage;
-<<<<<<< HEAD
-				prememoryusage = (memprof = getmemusage(precompile_usage)) ? prememoryusage - prestart_wss : 0;
-=======
 				prememoryusage = (memprof = getmemusage(precompile_usage)) ? precompile_usage - prestart_wss : 0;
->>>>>>> 8bc310f4e77bc72e4259e289afab34249bbbd3f0
 				if(memprof && !prememoryusage)
 					prememoryusage = prestart_wss;
 			}
