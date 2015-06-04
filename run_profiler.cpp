@@ -66,7 +66,7 @@ int usage(const char* name)
 	printf("                Setting n=0 will disable compilation.");
 	printf("                (This argument must appear here or nowhere.)");
 	printf("       profile.js: Name of file to run.\n");
-	printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file");
+	printf("       NAME=VALUE: Name/value pairs to override configuration values in the profiled file\n");
 	printf("\n");
 	printf("       Utility for profiling the JIT-compiling function of the tiny-js\n");
 	printf("       library. Profiles times per execution pre-JIT, post-JIT, and time to\n");
