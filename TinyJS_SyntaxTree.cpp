@@ -14,9 +14,6 @@
 #define FUNCTION_VECTOR_NAME "__t_"
 #define NO_LEAK_BEGIN() (std::string("(*") + FUNCTION_VECTOR_NAME + ".insert(" + FUNCTION_VECTOR_NAME + ".end(), ")
 #define NO_LEAK_END() ("))")
-// this is used as a placeholder to store things so that they can be pointerized
-// during emitting a function call
-#define FUNCTION_VALUE_PLACEHOLDER_NAME "__p_"
 
 CScriptSyntaxTree::CScriptSyntaxTree(CScriptLex* lexer)
 {
@@ -809,9 +806,6 @@ void CSyntaxFunction::emit(std::ostream & out, const std::string indentation)
     // generate bad code due to a redeclaration). 
     // thus, we should endeavor to declare as little extra as possible.
     out << realIndent + "    " << "std::vector<CScriptVarLink*> " << FUNCTION_VECTOR_NAME << ";\n";
-    // we also need a value-type CScriptVarLink, because evaluateComplex() returns a 
-    // non-pointer and we need to normalize it into a pointer.
-    out << realIndent + "    " << "CScriptVarLink " << FUNCTION_VALUE_PLACEHOLDER_NAME << ";\n";
     for(auto& arg : arguments)
     {
         // setup variable declarations/assignments
@@ -1076,7 +1070,8 @@ void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation
 
     // CSyntaxFunction::emit() doesn't set up a local CTinyJS variable because it
     // is only used here and we want to avoid accidental redeclarations of variables.
-    out << indentation << "(&(" << FUNCTION_VALUE_PLACEHOLDER_NAME << " = ((CTinyJS*)userData)->evaluateComplex(\"";
+	out << indentation << NO_LEAK_BEGIN();
+	out << "new CScriptVarLink(((CTinyJS*)userData)->evaluateComplex(\"";
     // we need to escape quotes
     std::string str = origString;
     size_t pos = 0;
@@ -1085,7 +1080,8 @@ void CSyntaxFunctionCall::emit(std::ostream & out, const std::string indentation
         str.insert(str.begin() + pos, '\\');
         pos += 2; // make sure to skip past both the \ and the " to avoid infinite loops
     }
-    out << str << "\")))";
+    out << str << "\").var)";
+	out << NO_LEAK_END();
 }
 
 CSyntaxDefinition::CSyntaxDefinition(CSyntaxExpression * lvalue, CSyntaxExpression * rvalue)

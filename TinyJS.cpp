@@ -834,16 +834,17 @@ CScriptVarLink::~CScriptVarLink()
 #if DEBUG_MEMORY
     mark_deallocated(this);
 #endif
-    if(var)
-        var->unref(this);
+	if(var)
+		unref(var);
 }
 
 CScriptVarLink* CScriptVarLink::replaceWith(CScriptVar *newVar)
 {
     CScriptVar *oldVar = var;
+	ASSERT(newVar->getRefs() >= 0);
     var = newVar->ref();
-    if(oldVar)
-        oldVar->unref(this);
+	if(oldVar)
+		unref(oldVar);
     return this;
 }
 
@@ -865,6 +866,14 @@ void CScriptVarLink::setIntName(int n)
     char sIdx[64];
     sprintf_s(sIdx, sizeof(sIdx), "%d", n);
     name = sIdx;
+}
+
+void CScriptVarLink::unref(CScriptVar* oldVar)
+{
+	if(oldVar->getRefs() <= 0)
+		TRACE("WARNING: Too many unrefs in variable \'%s\'. Stack may be corrupted.\n", name.c_str());
+	else
+		oldVar->unref();
 }
 
 // ----------------------------------------------------------------------------------- CSCRIPTVAR
@@ -1519,20 +1528,16 @@ CScriptVar *CScriptVar::ref()
     return this;
 }
 
-void CScriptVar::unref(CScriptVarLink* link)
+void CScriptVar::unref()
 {
 	if(refs <= 0)
 	{
-		if(link)
-			TRACE("WARNING: Too many unrefs in variable \'%s\'. Stack may be corrupted.\n", link->name.c_str());
-		else
-		{
-			std::ostringstream ss;
-			getJSON(ss);
-			TRACE("WARNING: Too many unrefs in variable with contents:\n %s\nStack may be corrupted.\n", ss.str().c_str());
-		}
+		std::ostringstream ss;
+		// this is risky
+		getJSON(ss);
+		TRACE("WARNING: Too many unrefs in variable with contents:\n%s\nStack may be corrupted.\n", ss.str().c_str());
 	}
-    if((--refs) == 0)
+    else if((--refs) == 0)
     {
         delete this;
     }

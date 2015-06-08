@@ -209,6 +209,9 @@ public:
     CScriptVarLink* replaceWith(CScriptVarLink *newVar); ///< Replace the Variable pointed to (just dereferences)
     int getIntName(); ///< Get the name as an integer (for arrays)
     void setIntName(int n); ///< Set the name as an integer (for arrays)
+	
+private:
+	void unref(CScriptVar* oldVar);
 };
 
 /// Variable class (containing a doubly-linked list of children)
@@ -279,7 +282,7 @@ public:
 
     /// For memory management/garbage collection
     CScriptVar *ref(); ///< Add reference to this variable
-    void unref(CScriptVarLink* link = 0); ///< Remove a reference, and delete this variable if required
+    void unref(); ///< Remove a reference, and delete this variable if required
     int getRefs(); ///< Get the number of references to this script variable
 protected:
     int refs; ///< The number of references held to this - used for garbage collection
