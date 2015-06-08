@@ -1524,12 +1524,12 @@ void CScriptVar::unref(CScriptVarLink* link)
 	if(refs <= 0)
 	{
 		if(link)
-			TRACE("WARNING: Too many unrefs in variable \'%s\'. Stack may be corrupted.", link->name);
+			TRACE("WARNING: Too many unrefs in variable \'%s\'. Stack may be corrupted.", link->name.c_str());
 		else
 		{
 			std::ostringstream ss;
 			getJSON(ss);
-			TRACE("WARNING: Too many unrefs in variable with contents:\n %s\nStack may be corrupted.", ss.str());
+			TRACE("WARNING: Too many unrefs in variable with contents:\n %s\nStack may be corrupted.", ss.str().c_str());
 		}
 	}
     if((--refs) == 0)
