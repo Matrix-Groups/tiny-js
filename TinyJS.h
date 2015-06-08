@@ -279,7 +279,7 @@ public:
 
     /// For memory management/garbage collection
     CScriptVar *ref(); ///< Add reference to this variable
-    void unref(); ///< Remove a reference, and delete this variable if required
+    void unref(CScriptVarLink* link = 0); ///< Remove a reference, and delete this variable if required
     int getRefs(); ///< Get the number of references to this script variable
 protected:
     int refs; ///< The number of references held to this - used for garbage collection

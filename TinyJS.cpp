@@ -835,7 +835,7 @@ CScriptVarLink::~CScriptVarLink()
     mark_deallocated(this);
 #endif
     if(var)
-        var->unref();
+        var->unref(this);
 }
 
 CScriptVarLink* CScriptVarLink::replaceWith(CScriptVar *newVar)
@@ -843,7 +843,7 @@ CScriptVarLink* CScriptVarLink::replaceWith(CScriptVar *newVar)
     CScriptVar *oldVar = var;
     var = newVar->ref();
     if(oldVar)
-        oldVar->unref();
+        oldVar->unref(this);
     return this;
 }
 
@@ -1519,9 +1519,19 @@ CScriptVar *CScriptVar::ref()
     return this;
 }
 
-void CScriptVar::unref()
+void CScriptVar::unref(CScriptVarLink* link)
 {
-    if(refs <= 0) printf("OMFG, we have unreffed too far!\n");
+	if(refs <= 0)
+	{
+		if(link)
+			TRACE("WARNING: Too many unrefs in variable \'%s\'. Stack may be corrupted.", link->name);
+		else
+		{
+			std::ostringstream ss;
+			getJSON(ss);
+			TRACE("WARNING: Too many unrefs in variable with contents:\n %s\nStack may be corrupted.", ss.str());
+		}
+	}
     if((--refs) == 0)
     {
         delete this;

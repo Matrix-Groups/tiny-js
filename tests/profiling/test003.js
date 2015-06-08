@@ -11,6 +11,7 @@ function sort(array) {
 			}
 		}
 	}
+	return array;
 }
 
 function create() {

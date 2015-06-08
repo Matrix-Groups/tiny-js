@@ -42,6 +42,7 @@
 #include <iostream>	 
 #include <sstream>
 #include <cstring>
+#include <sstream>
 
 #ifdef _MSC_VER
 #include <Psapi.h>
@@ -206,6 +207,10 @@ int main(int argc, char **argv)
 		double* times = new double[iterations];
 		printf("Beginning profiling, please be patient!\n");
 
+		string precompileresult;
+		string postcompileresult;
+
+		std::ostringstream s;
 		memprof = getmemusage(prestart_wss);
 		for(i = 0; i < iterations; i++)
 		{
@@ -218,9 +223,28 @@ int main(int argc, char **argv)
 			}
 
 			tstart = (double)clock() / CLOCKS_PER_SEC;
-			js->evaluate(profstring);
+			CScriptVarLink result = js->evaluateComplex(profstring);
+			if(!i)
+			{
+				result.var->getJSON(s);
+				precompileresult = s.str();
+				s.str("");
+				s.clear();
+			}
+			else if(i == jit_at)
+			{
+				result.var->getJSON(s);
+				postcompileresult = s.str();
+			}
 			tstop = (double)clock() / CLOCKS_PER_SEC;
 			times[i] = tstop - tstart;
+		}
+
+		if(precompileresult != postcompileresult)
+		{
+			cout << "WARNING: first execution result does not match first compiled execution result." << endl;
+			cout << "Results were:" << endl;
+			cout << precompileresult << endl << endl << postcompileresult;
 		}
 
 		// calculate max/min for precompile/postcompile, avg for pre/post
@@ -268,15 +292,19 @@ int main(int argc, char **argv)
 		}
 
         cout << "Profiled function " << fnname << " a total of " + iter.var->getString() + " time(s)." << endl;
-		cout << "Pre-compile min, max, average: " << premin << "s, " << premax << "s, " << preavg << "s" << endl;
-		cout << "Execution that triggered compilation took: " << compileexec << "s" << endl;
-		cout << "Post-compile min, max (excl. compile execution), average (incl. compile execution), average (excl. compile execution): " << endl;
-		cout << "\t" << postmin << "s, " << postmax << "s, " << postavgincl << "s, " << postavgexcl << "s" << endl;
-		cout << "Total average with " << iterations << " iterations: " << avg << "s" << endl;
+		cout << "Precompile min:\t\t\t\t" << premin << endl;
+		cout << "Precompile max:\t\t\t\t" << premax << endl;
+		cout << "Precompile avg:\t\t\t\t" << preavg << endl;
+		cout << "Compilation execution time:\t\t" << compileexec << endl;
+		cout << "Postcompile min:\t\t\t" << postmin << endl;
+		cout << "Postcompile max:\t\t\t" << postmax << endl;
+		cout << "Postcompile avg (incl. compile exec):\t" << postavgincl << endl;
+		cout << "Postcompile avg (excl. compile exec):\t" << postavgexcl << endl;
+		cout << "Total avg:\t\t\t\t" << avg << endl;
 		if(memprof)
 		{
-			cout << "Max resident working set pre-JIT: " << prememoryusage << ((prememoryusage == prestart_wss) ? "kb (shadowed by startup)" : "kb") << endl;
-			cout << "Max resident working set post-JIT: " << postmemoryusage << ((postmemoryusage == prestart_wss) ? "kb (shadowed by startup)" : "kb") << endl;
+			cout << "pre-JIT max rss:\t\t\t" << prememoryusage << ((prememoryusage == prestart_wss) ? "kb (shadowed by startup)" : "kb") << endl;
+			cout << "post-JIT max rss:\t\t\t" << postmemoryusage << ((postmemoryusage == prestart_wss) ? "kb (shadowed by startup)" : "kb") << endl;
 		}
 		else
 			cout << "(Memory profiling disabled due to error)" << endl;
